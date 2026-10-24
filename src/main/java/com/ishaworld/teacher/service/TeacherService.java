@@ -79,8 +79,14 @@ public class TeacherService {
 
     @Transactional(readOnly = true)
     public TeacherResponse findBySlug(String slug) {
-        return toResponse(teacherRepository.findBySlugAndListingStatus(slug, ListingStatus.APPROVED)
+        return toResponse(teacherRepository.findBySlugAndActiveTrueAndListingStatus(slug, ListingStatus.APPROVED)
                 .orElseThrow(() -> new NotFoundException("Teacher not found")));
+    }
+
+    /** Any teacher, whatever their status, for admin edit forms. */
+    @Transactional(readOnly = true)
+    public TeacherResponse findForAdmin(Long id) {
+        return toResponse(getTeacher(id));
     }
 
     @Transactional

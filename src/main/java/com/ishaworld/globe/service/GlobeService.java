@@ -10,8 +10,10 @@ import com.ishaworld.state.repository.StateRepository;
 import com.ishaworld.teacher.repository.TeacherRepository;
 import java.math.BigDecimal;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -61,7 +63,7 @@ public class GlobeService {
                 // One grouped query per kind instead of one count query per city.
                 Map<Long, Long> teachers = toCounts(teacherRepository.countPublicByCity(ListingStatus.APPROVED));
                 Map<Long, Long> meditators = meditatorService.countVisibleByCity();
-                yield cityRepository.findAll(PageRequest.of(0, 1000))
+                yield cityRepository.findByListingStatusAndActiveTrue(ListingStatus.APPROVED, PageRequest.of(0, 1000))
                         .map(city -> new GlobeMarkerResponse(
                                 city.getId(),
                                 city.getSlug(),
@@ -113,7 +115,10 @@ public class GlobeService {
                     .toList();
             default -> {
                 Map<Long, Long> teachers = toCounts(teacherRepository.countPublicByCountry(ListingStatus.APPROVED));
+                // A country appears once it has at least one approved city (members can add new countries).
+                Set<Long> withCities = new HashSet<>(cityRepository.findCountryIdsWithStatus(ListingStatus.APPROVED));
                 yield countryRepository.findAll(PageRequest.of(0, 250))
+                        .filter(country -> withCities.contains(country.getId()))
                         .map(country -> new GlobeMarkerResponse(
                                 country.getId(),
                                 null,
@@ -124,7 +129,7 @@ public class GlobeService {
                                 Math.toIntExact(teachers.getOrDefault(country.getId(), 0L)),
                                 null
                         ))
-                        .getContent();
+                        .toList();
             }
         };
     }

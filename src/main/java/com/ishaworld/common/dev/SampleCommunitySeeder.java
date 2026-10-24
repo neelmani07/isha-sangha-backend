@@ -1,16 +1,29 @@
 package com.ishaworld.common.dev;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ishaworld.center.repository.CenterRepository;
 import com.ishaworld.city.entity.City;
 import com.ishaworld.city.repository.CityRepository;
 import com.ishaworld.common.enums.InitiativeKind;
 import com.ishaworld.common.enums.ListingStatus;
+import com.ishaworld.common.SlugGenerator;
 import com.ishaworld.common.enums.ResourceCategory;
+import com.ishaworld.common.enums.ShopCategory;
+import com.ishaworld.common.enums.ShopDelivery;
+import com.ishaworld.common.enums.StoryCategory;
 import com.ishaworld.initiative.entity.Initiative;
 import com.ishaworld.initiative.repository.InitiativeRepository;
 import com.ishaworld.resourcelink.entity.ResourceLink;
 import com.ishaworld.resourcelink.repository.ResourceLinkRepository;
+import com.ishaworld.shop.entity.ShopListing;
+import com.ishaworld.shop.repository.ShopListingRepository;
+import com.ishaworld.story.entity.Story;
+import com.ishaworld.story.repository.StoryRepository;
 import com.ishaworld.user.entity.AppUser;
 import com.ishaworld.user.repository.AppUserRepository;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Random;
 import org.slf4j.Logger;
@@ -18,11 +31,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.annotation.Order;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Local development only: sample initiatives (with supporters) and resource links, so those pages have
+ * Local development only: sample initiatives (with supporters), resource links and stories (with likes), so those pages have
  * something to show. Off unless SEED_SAMPLE_DATA=true; runs after the sample meditators exist.
  */
 @Component
@@ -36,6 +50,37 @@ public class SampleCommunitySeeder implements CommandLineRunner {
                                     String citySlug, int year, String by, String needs, String needsNote,
                                     String whatsapp, String email, String website, String photo) {
     }
+
+    private record SampleProduct(String title, ShopCategory category, String description, String price, String priceNote,
+                                 ShopDelivery delivery, String citySlug, String seller, String whatsapp, String email) {
+    }
+
+    private static final List<SampleProduct> PRODUCTS = List.of(
+            new SampleProduct("Cold-pressed groundnut oil", ShopCategory.FOOD,
+                    "Wood-pressed (marachekku) oil from groundnuts grown without chemicals on our family farm. Sold in 1 litre glass bottles.",
+                    "420", "per litre", ShopDelivery.LOCAL_DELIVERY, "coimbatore", "Lakshmi S.", "919800000011", null),
+            new SampleProduct("Hand-block printed cotton stoles", ShopCategory.CLOTHING,
+                    "Soft cotton stoles printed by hand with natural dyes. Each one is slightly different. About 2 m x 0.7 m.",
+                    "650", null, ShopDelivery.SHIPS_COUNTRY, "bengaluru", "Ananya R.", "919800000012", "stoles@example.org"),
+            new SampleProduct("Sprouted ragi malt", ShopCategory.FOOD,
+                    "Sprouted, sun-dried and stone-ground finger millet. Nothing added. 500 g pouch.",
+                    "180", "per 500 g", ShopDelivery.SHIPS_COUNTRY, "coimbatore", "Meena K.", "919800000013", null),
+            new SampleProduct("Hand-thrown clay water pots", ShopCategory.HOME,
+                    "Unglazed terracotta pots that keep water cool naturally. 5 litre size with a lid and a wooden stand.",
+                    "900", null, ShopDelivery.PICKUP, "bengaluru", "Ravi P.", "919800000014", null),
+            new SampleProduct("Beeswax food wraps", ShopCategory.HOME,
+                    "Reusable cotton wraps coated in local beeswax, a plastic-free way to cover bowls and wrap snacks. Pack of three sizes.",
+                    "24", "per pack (EUR)", ShopDelivery.SHIPS_WORLDWIDE, "berlin", "Jonas M.", null, "wraps@example.org"),
+            new SampleProduct("Herbal tooth powder", ShopCategory.WELLNESS,
+                    "Neem, clove and babool bark ground together. 100 g tin.",
+                    "120", null, ShopDelivery.SHIPS_COUNTRY, "coimbatore", "Lakshmi S.", "919800000011", null),
+            new SampleProduct("Children's picture book: The Little Banyan", ShopCategory.BOOKS,
+                    "A self-published picture book about a banyan sapling and the creatures it shelters. For ages 4 to 8.",
+                    "18", "AUD", ShopDelivery.SHIPS_WORLDWIDE, "melbourne", "Priya N.", null, "littlebanyan@example.org"),
+            new SampleProduct("Crocheted meditation cushion covers", ShopCategory.CRAFTS,
+                    "Thick cotton crochet covers that fit a standard round cushion. Made to order in your choice of colour.",
+                    null, "Price on request", ShopDelivery.SHIPS_COUNTRY, "mcminnville", "Sarah T.", null, "crochet@example.org")
+    );
 
     private static final String UNSPLASH = "https://images.unsplash.com/photo-%s?w=900&q=70&auto=format&fit=crop";
 
@@ -112,8 +157,16 @@ public class SampleCommunitySeeder implements CommandLineRunner {
             new SampleLink("Isha Yoga Centre, Coimbatore", "https://isha.sadhguru.org/in/en/center/isha-yoga-center-coimbatore",
                     ResourceCategory.PROGRAMMES, "Visiting the ashram: timings, how to reach and what to see."));
 
+    private record SampleStory(String slug, String title, String category, String body, String author, String placeKind,
+                               String placeSlug, String photoUrl, String publishedOn, int likes, boolean featured) {
+    }
+
     private final InitiativeRepository initiativeRepository;
     private final ResourceLinkRepository resourceLinkRepository;
+    private final StoryRepository storyRepository;
+    private final ShopListingRepository shopListingRepository;
+    private final CenterRepository centerRepository;
+    private final ObjectMapper objectMapper;
     private final CityRepository cityRepository;
     private final AppUserRepository appUserRepository;
 
@@ -121,8 +174,16 @@ public class SampleCommunitySeeder implements CommandLineRunner {
             InitiativeRepository initiativeRepository,
             ResourceLinkRepository resourceLinkRepository,
             CityRepository cityRepository,
-            AppUserRepository appUserRepository
+            AppUserRepository appUserRepository,
+            StoryRepository storyRepository,
+            ShopListingRepository shopListingRepository,
+            CenterRepository centerRepository,
+            ObjectMapper objectMapper
     ) {
+        this.storyRepository = storyRepository;
+        this.shopListingRepository = shopListingRepository;
+        this.centerRepository = centerRepository;
+        this.objectMapper = objectMapper;
         this.initiativeRepository = initiativeRepository;
         this.resourceLinkRepository = resourceLinkRepository;
         this.cityRepository = cityRepository;
@@ -187,5 +248,74 @@ public class SampleCommunitySeeder implements CommandLineRunner {
             }
             log.warn("[DEV] Seeded sample resource links");
         }
+
+        if (storyRepository.count() == 0) {
+            seedStories(sampleUsers, random);
+        }
+
+        if (shopListingRepository.count() == 0) {
+            for (SampleProduct s : PRODUCTS) {
+                City city = cityRepository.findBySlug(s.citySlug()).orElse(null);
+                if (city == null) {
+                    continue;
+                }
+                ShopListing p = new ShopListing();
+                p.setSlug(SlugGenerator.from(s.title() + " " + city.getName()));
+                p.setTitle(s.title());
+                p.setCategory(s.category());
+                p.setDescription(s.description());
+                p.setPriceAmount(s.price() == null ? null : new java.math.BigDecimal(s.price()));
+                p.setPriceNote(s.priceNote());
+                p.setDelivery(s.delivery());
+                p.setCity(city);
+                p.setSellerName(s.seller());
+                p.setContactWhatsapp(s.whatsapp());
+                p.setContactEmail(s.email());
+                p.setRulesConfirmed(true);
+                p.setListingStatus(ListingStatus.APPROVED);
+                shopListingRepository.save(p);
+            }
+            log.warn("[DEV] Seeded sample shop listings");
+        }
+    }
+
+    private void seedStories(List<AppUser> sampleUsers, Random random) {
+        List<SampleStory> samples;
+        try (var in = new ClassPathResource("dev/sample-stories.json").getInputStream()) {
+            samples = objectMapper.readValue(in, new TypeReference<>() {
+            });
+        } catch (java.io.IOException ex) {
+            log.warn("[DEV] Could not read sample stories: {}", ex.getMessage());
+            return;
+        }
+        for (SampleStory s : samples) {
+            Story story = new Story();
+            story.setSlug(s.slug());
+            story.setTitle(s.title());
+            story.setCategory(StoryCategory.valueOf(s.category()));
+            story.setBody(s.body());
+            String flat = s.body().replaceAll("\\s+", " ");
+            story.setExcerpt(flat.length() <= 240 ? flat : flat.substring(0, flat.lastIndexOf(' ', 240)) + "…");
+            story.setAuthorName(s.author());
+            if ("center".equals(s.placeKind())) {
+                centerRepository.findBySlug(s.placeSlug()).ifPresent(c -> {
+                    story.setCenter(c);
+                    story.setCity(c.getCity());
+                });
+            } else {
+                cityRepository.findBySlug(s.placeSlug()).ifPresent(story::setCity);
+            }
+            story.setPhotoUrl(s.photoUrl());
+            story.setFeatured(s.featured());
+            story.setPublishedAt(LocalDate.parse(s.publishedOn()).atStartOfDay(ZoneOffset.UTC).toInstant());
+            story.setListingStatus(ListingStatus.APPROVED);
+            Story saved = storyRepository.save(story);
+            sampleUsers.stream().limit(Math.min(sampleUsers.size(), Math.max(1, s.likes() / 4))).forEach(u -> {
+                if (random.nextInt(3) > 0) {
+                    storyRepository.addLike(saved.getId(), u.getId());
+                }
+            });
+        }
+        log.warn("[DEV] Seeded sample stories");
     }
 }

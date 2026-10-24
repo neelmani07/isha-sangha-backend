@@ -1,15 +1,19 @@
 package com.ishaworld.city.entity;
 
 import com.ishaworld.common.entity.BaseEntity;
+import com.ishaworld.common.enums.ListingStatus;
 import com.ishaworld.country.entity.Country;
 import com.ishaworld.state.entity.State;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
+import java.time.Instant;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -47,5 +51,21 @@ public class City extends BaseEntity {
 
     @Column(nullable = false)
     private boolean active = true;
-}
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "listing_status", nullable = false, length = 20)
+    private ListingStatus listingStatus = ListingStatus.APPROVED;
+
+    @Column(name = "rejection_reason", length = 500)
+    private String rejectionReason;
+
+    @Column(name = "reviewed_at")
+    private Instant reviewedAt;
+
+    @Column(name = "reviewed_by", length = 255)
+    private String reviewedBy;
+
+    /** Set when a member added this city; null for cities added by admins or seed data. */
+    @Column(name = "submitted_by_user_id")
+    private Long submittedByUserId;
+}

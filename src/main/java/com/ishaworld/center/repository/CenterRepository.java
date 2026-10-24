@@ -41,9 +41,12 @@ public interface CenterRepository extends JpaRepository<Center, Long> {
 
     List<Center> findTop10ByNameContainingIgnoreCaseAndActiveTrueAndListingStatus(String name, ListingStatus listingStatus);
 
-    Optional<Center> findBySlugAndListingStatus(String slug, ListingStatus listingStatus);
+    Optional<Center> findBySlugAndActiveTrueAndListingStatus(String slug, ListingStatus listingStatus);
 
     boolean existsBySlug(String slug);
+
+    @EntityGraph(attributePaths = "city")
+    List<Center> findTop50ByNameContainingIgnoreCaseOrderByName(String name);
 
     List<Center> findBySubmittedByUserIdOrderByCreatedAtDesc(Long userId);
 

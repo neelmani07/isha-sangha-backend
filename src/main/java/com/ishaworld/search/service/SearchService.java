@@ -67,7 +67,7 @@ public class SearchService {
                         toDouble(state.getLongitude())
                 )));
 
-        cityRepository.findTop10ByNameContainingIgnoreCase(query)
+        cityRepository.findTop10ByNameContainingIgnoreCaseAndListingStatusAndActiveTrue(query, ListingStatus.APPROVED)
                 .forEach(city -> results.add(new SearchResultResponse(
                         "CITY",
                         city.getId(),

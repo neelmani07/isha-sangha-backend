@@ -143,6 +143,7 @@ public class NearbyService {
                     FROM city c
                     JOIN state s ON s.id = c.state_id
                     WHERE c.active = TRUE
+                      AND c.listing_status = 'APPROVED'
                       AND c.latitude IS NOT NULL
                       AND c.longitude IS NOT NULL
                 ) nearby_cities

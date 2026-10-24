@@ -10,6 +10,8 @@ import com.ishaworld.listing.dto.TeacherSubmissionRequest;
 import com.ishaworld.listing.service.ListingSubmissionService;
 import com.ishaworld.resourcelink.dto.ResourceSubmissionRequest;
 import com.ishaworld.security.AuthenticatedUser;
+import com.ishaworld.shop.dto.ShopListingRequest;
+import com.ishaworld.story.dto.StorySubmissionRequest;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.MediaType;
@@ -56,6 +58,44 @@ public class MyListingsController {
     @GetMapping("/listings/centers/{id}")
     ApiResponse<OwnListingResponse> ownCenter(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable Long id) {
         return ApiResponse.success(submissionService.ownCenter(user.id(), id));
+    }
+
+    @GetMapping("/listings/products/{id}")
+    ApiResponse<OwnListingResponse> ownProduct(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable Long id) {
+        return ApiResponse.success(submissionService.ownProduct(user.id(), id));
+    }
+
+    @PostMapping("/listings/products")
+    ApiResponse<MyListingResponse> submitProduct(@AuthenticationPrincipal AuthenticatedUser user, @Valid @RequestBody ShopListingRequest request) {
+        return ApiResponse.success(submissionService.submitProduct(user.id(), request));
+    }
+
+    @PutMapping("/listings/products/{id}")
+    ApiResponse<MyListingResponse> updateProduct(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable Long id,
+            @Valid @RequestBody ShopListingRequest request
+    ) {
+        return ApiResponse.success(submissionService.updateProduct(user.id(), id, request));
+    }
+
+    @GetMapping("/listings/stories/{id}")
+    ApiResponse<OwnListingResponse> ownStory(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable Long id) {
+        return ApiResponse.success(submissionService.ownStory(user.id(), id));
+    }
+
+    @PostMapping("/listings/stories")
+    ApiResponse<MyListingResponse> submitStory(@AuthenticationPrincipal AuthenticatedUser user, @Valid @RequestBody StorySubmissionRequest request) {
+        return ApiResponse.success(submissionService.submitStory(user.id(), request));
+    }
+
+    @PutMapping("/listings/stories/{id}")
+    ApiResponse<MyListingResponse> updateStory(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable Long id,
+            @Valid @RequestBody StorySubmissionRequest request
+    ) {
+        return ApiResponse.success(submissionService.updateStory(user.id(), id, request));
     }
 
     @GetMapping("/listings/initiatives/{id}")

@@ -28,6 +28,11 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error(ex.getMessage()));
     }
 
+    @ExceptionHandler(TooManyRequestsException.class)
+    ResponseEntity<ApiResponse<Void>> handleTooMany(TooManyRequestsException ex) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(ApiResponse.error(ex.getMessage()));
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     ResponseEntity<ApiResponse<Void>> handleConflict(DataIntegrityViolationException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error(
