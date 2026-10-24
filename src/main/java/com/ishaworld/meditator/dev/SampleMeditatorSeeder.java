@@ -14,17 +14,19 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 /**
  * Local development only: creates sample members with meditator profiles so the map has people on it.
- * Off unless SEED_SAMPLE_MEDITATORS=true. Sample accounts use emails like sample-meditator-12@example.org;
+ * Off unless SEED_SAMPLE_DATA=true. Sample accounts use emails like sample-meditator-12@example.org;
  * remove them with:
  *   DELETE FROM meditator WHERE app_user_id IN (SELECT id FROM app_user WHERE email LIKE 'sample-meditator-%');
  *   DELETE FROM app_user WHERE email LIKE 'sample-meditator-%';
  */
 @Component
-@ConditionalOnProperty(name = "app.dev.seed-sample-meditators", havingValue = "true")
+@ConditionalOnProperty(name = "app.dev.seed-sample-data", havingValue = "true")
+@Order(1)
 public class SampleMeditatorSeeder implements CommandLineRunner {
 
     private static final Logger log = LoggerFactory.getLogger(SampleMeditatorSeeder.class);

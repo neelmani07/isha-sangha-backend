@@ -10,11 +10,19 @@ import com.ishaworld.common.enums.ListingStatus;
 import com.ishaworld.common.enums.TeachingMode;
 import com.ishaworld.exception.BusinessException;
 import com.ishaworld.exception.NotFoundException;
+import com.ishaworld.initiative.dto.InitiativeSubmissionRequest;
+import com.ishaworld.initiative.entity.Initiative;
+import com.ishaworld.initiative.repository.InitiativeRepository;
+import com.ishaworld.initiative.service.InitiativeService;
 import com.ishaworld.listing.dto.CenterSubmissionRequest;
 import com.ishaworld.listing.dto.MyListingResponse;
 import com.ishaworld.listing.dto.OwnListingResponse;
 import com.ishaworld.listing.dto.TeacherSubmissionRequest;
 import com.ishaworld.program.service.ProgramService;
+import com.ishaworld.resourcelink.dto.ResourceSubmissionRequest;
+import com.ishaworld.resourcelink.entity.ResourceLink;
+import com.ishaworld.resourcelink.repository.ResourceLinkRepository;
+import com.ishaworld.resourcelink.service.ResourceLinkService;
 import com.ishaworld.storage.ProofStorage;
 import com.ishaworld.teacher.entity.Teacher;
 import com.ishaworld.teacher.repository.TeacherRepository;
@@ -46,6 +54,10 @@ public class ListingSubmissionService {
     private final ProgramService programService;
     private final ProofStorage proofStorage;
     private final TeacherService teacherService;
+    private final InitiativeService initiativeService;
+    private final InitiativeRepository initiativeRepository;
+    private final ResourceLinkService resourceLinkService;
+    private final ResourceLinkRepository resourceLinkRepository;
     private final CenterService centerService;
 
     public ListingSubmissionService(
@@ -55,7 +67,11 @@ public class ListingSubmissionService {
             ProgramService programService,
             ProofStorage proofStorage,
             TeacherService teacherService,
-            CenterService centerService
+            CenterService centerService,
+            InitiativeService initiativeService,
+            InitiativeRepository initiativeRepository,
+            ResourceLinkService resourceLinkService,
+            ResourceLinkRepository resourceLinkRepository
     ) {
         this.teacherRepository = teacherRepository;
         this.centerRepository = centerRepository;
@@ -63,6 +79,10 @@ public class ListingSubmissionService {
         this.programService = programService;
         this.proofStorage = proofStorage;
         this.teacherService = teacherService;
+        this.initiativeService = initiativeService;
+        this.initiativeRepository = initiativeRepository;
+        this.resourceLinkService = resourceLinkService;
+        this.resourceLinkRepository = resourceLinkRepository;
         this.centerService = centerService;
     }
 
@@ -79,6 +99,8 @@ public class ListingSubmissionService {
         centerRepository.findBySubmittedByUserIdOrderByCreatedAtDesc(userId).forEach(c -> listings.add(new MyListingResponse(
                 "CENTER", c.getId(), c.getName(), c.getSlug(), c.getCity().getName(),
                 c.getListingStatus(), c.getRejectionReason(), c.getCreatedAt())));
+        initiativeRepository.findBySubmittedByUserIdOrderByCreatedAtDesc(userId).forEach(i -> listings.add(toMine(i)));
+        resourceLinkRepository.findBySubmittedByUserIdOrderByCreatedAtDesc(userId).forEach(r -> listings.add(toMine(r)));
         listings.sort(Comparator.comparing(MyListingResponse::submittedAt).reversed());
         return listings;
     }
@@ -88,7 +110,7 @@ public class ListingSubmissionService {
         Teacher t = teacherRepository.findById(id)
                 .filter(found -> Objects.equals(found.getSubmittedByUserId(), userId))
                 .orElseThrow(() -> new NotFoundException("Listing not found"));
-        return new OwnListingResponse(t.getListingStatus(), t.getRejectionReason(), t.getProofUrl(), teacherService.toResponse(t), null);
+        return new OwnListingResponse(t.getListingStatus(), t.getRejectionReason(), t.getProofUrl(), teacherService.toResponse(t), null, null, null);
     }
 
     @Transactional(readOnly = true)
@@ -96,7 +118,41 @@ public class ListingSubmissionService {
         Center c = centerRepository.findById(id)
                 .filter(found -> Objects.equals(found.getSubmittedByUserId(), userId))
                 .orElseThrow(() -> new NotFoundException("Listing not found"));
-        return new OwnListingResponse(c.getListingStatus(), c.getRejectionReason(), c.getProofUrl(), null, centerService.toResponse(c));
+        return new OwnListingResponse(c.getListingStatus(), c.getRejectionReason(), c.getProofUrl(), null, centerService.toResponse(c), null, null);
+    }
+
+    @Transactional
+    public MyListingResponse submitInitiative(Long userId, InitiativeSubmissionRequest request) {
+        return toMine(initiativeService.submit(userId, request));
+    }
+
+    @Transactional
+    public MyListingResponse updateInitiative(Long userId, Long id, InitiativeSubmissionRequest request) {
+        return toMine(initiativeService.update(userId, id, request));
+    }
+
+    @Transactional(readOnly = true)
+    public OwnListingResponse ownInitiative(Long userId, Long id) {
+        Initiative i = initiativeService.own(userId, id);
+        return new OwnListingResponse(i.getListingStatus(), i.getRejectionReason(), i.getPhotoKey(), null, null,
+                initiativeService.toResponses(List.of(i), userId).get(0), null);
+    }
+
+    @Transactional
+    public MyListingResponse submitResource(Long userId, ResourceSubmissionRequest request) {
+        return toMine(resourceLinkService.submit(userId, request));
+    }
+
+    @Transactional
+    public MyListingResponse updateResource(Long userId, Long id, ResourceSubmissionRequest request) {
+        return toMine(resourceLinkService.update(userId, id, request));
+    }
+
+    @Transactional(readOnly = true)
+    public OwnListingResponse ownResource(Long userId, Long id) {
+        ResourceLink r = resourceLinkService.own(userId, id);
+        return new OwnListingResponse(r.getListingStatus(), r.getRejectionReason(), null, null, null, null,
+                resourceLinkService.toResponses(List.of(r), userId).get(0));
     }
 
     @Transactional
@@ -219,6 +275,16 @@ public class ListingSubmissionService {
             slug = base + "-" + i;
         }
         return slug;
+    }
+
+    private static MyListingResponse toMine(Initiative i) {
+        return new MyListingResponse("INITIATIVE", i.getId(), i.getTitle(), i.getSlug(), i.getCity().getName(),
+                i.getListingStatus(), i.getRejectionReason(), i.getCreatedAt());
+    }
+
+    private static MyListingResponse toMine(ResourceLink r) {
+        return new MyListingResponse("RESOURCE", r.getId(), r.getTitle(), null, r.getCity() == null ? null : r.getCity().getName(),
+                r.getListingStatus(), r.getRejectionReason(), r.getCreatedAt());
     }
 
     private static MyListingResponse toMine(Teacher t) {

@@ -5,7 +5,15 @@ import com.ishaworld.center.repository.CenterRepository;
 import com.ishaworld.center.service.CenterService;
 import com.ishaworld.common.enums.ListingStatus;
 import com.ishaworld.exception.NotFoundException;
+import com.ishaworld.initiative.dto.InitiativeResponse;
+import com.ishaworld.initiative.entity.Initiative;
+import com.ishaworld.initiative.repository.InitiativeRepository;
+import com.ishaworld.initiative.service.InitiativeService;
 import com.ishaworld.listing.dto.AdminListingResponse;
+import com.ishaworld.resourcelink.dto.ResourceLinkResponse;
+import com.ishaworld.resourcelink.entity.ResourceLink;
+import com.ishaworld.resourcelink.repository.ResourceLinkRepository;
+import com.ishaworld.resourcelink.service.ResourceLinkService;
 import com.ishaworld.teacher.entity.Teacher;
 import com.ishaworld.teacher.repository.TeacherRepository;
 import com.ishaworld.teacher.service.TeacherService;
@@ -23,7 +31,7 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** The admin approval queue for member-submitted teachers and centers. */
+/** The admin approval queue for everything members submit: teachers, centres, initiatives and links. */
 @Service
 public class ListingReviewService {
 
@@ -32,19 +40,34 @@ public class ListingReviewService {
     private final TeacherService teacherService;
     private final CenterService centerService;
     private final AppUserRepository appUserRepository;
+    private final InitiativeRepository initiativeRepository;
+    private final InitiativeService initiativeService;
+    private final ResourceLinkRepository resourceLinkRepository;
+    private final ResourceLinkService resourceLinkService;
+
+    /** Any non-null viewer id unlocks members-only links; reviewers never vote, so 0 is safe. */
+    private static final Long REVIEWER_VIEWER = 0L;
 
     public ListingReviewService(
             TeacherRepository teacherRepository,
             CenterRepository centerRepository,
             TeacherService teacherService,
             CenterService centerService,
-            AppUserRepository appUserRepository
+            AppUserRepository appUserRepository,
+            InitiativeRepository initiativeRepository,
+            InitiativeService initiativeService,
+            ResourceLinkRepository resourceLinkRepository,
+            ResourceLinkService resourceLinkService
     ) {
         this.teacherRepository = teacherRepository;
         this.centerRepository = centerRepository;
         this.teacherService = teacherService;
         this.centerService = centerService;
         this.appUserRepository = appUserRepository;
+        this.initiativeRepository = initiativeRepository;
+        this.initiativeService = initiativeService;
+        this.resourceLinkRepository = resourceLinkRepository;
+        this.resourceLinkService = resourceLinkService;
     }
 
     @Transactional(readOnly = true)
@@ -54,9 +77,16 @@ public class ListingReviewService {
         List<Center> centers = centerRepository.findByListingStatusOrderByCreatedAtAsc(status).stream()
                 .filter(c -> c.getSubmittedByUserId() != null).toList();
 
+        List<Initiative> initiatives = initiativeRepository.findByListingStatusOrderByCreatedAtAsc(status).stream()
+                .filter(i -> i.getSubmittedByUserId() != null).toList();
+        List<ResourceLink> resources = resourceLinkRepository.findByListingStatusOrderByCreatedAtAsc(status).stream()
+                .filter(r -> r.getSubmittedByUserId() != null).toList();
+
         Set<Long> userIds = new HashSet<>();
         teachers.forEach(t -> userIds.add(t.getSubmittedByUserId()));
         centers.forEach(c -> userIds.add(c.getSubmittedByUserId()));
+        initiatives.forEach(i -> userIds.add(i.getSubmittedByUserId()));
+        resources.forEach(r -> userIds.add(r.getSubmittedByUserId()));
         Map<Long, String> emails = appUserRepository.findAllById(userIds).stream()
                 .collect(Collectors.toMap(AppUser::getId, AppUser::getEmail, (a, b) -> a));
         Function<Long, String> email = id -> emails.getOrDefault(id, "unknown");
@@ -64,10 +94,23 @@ public class ListingReviewService {
         List<AdminListingResponse> queue = new ArrayList<>();
         teachers.forEach(t -> queue.add(new AdminListingResponse("TEACHER", t.getId(), t.getListingStatus(),
                 email.apply(t.getSubmittedByUserId()), t.getProofUrl(), t.getCreatedAt(), t.getRejectionReason(),
-                teacherService.toResponse(t), null)));
+                teacherService.toResponse(t), null, null, null)));
         centers.forEach(c -> queue.add(new AdminListingResponse("CENTER", c.getId(), c.getListingStatus(),
                 email.apply(c.getSubmittedByUserId()), c.getProofUrl(), c.getCreatedAt(), c.getRejectionReason(),
-                null, centerService.toResponse(c))));
+                null, centerService.toResponse(c), null, null)));
+        List<InitiativeResponse> initiativeViews = initiativeService.toResponses(initiatives, null);
+        for (int k = 0; k < initiatives.size(); k++) {
+            Initiative i = initiatives.get(k);
+            queue.add(new AdminListingResponse("INITIATIVE", i.getId(), i.getListingStatus(), email.apply(i.getSubmittedByUserId()),
+                    null, i.getCreatedAt(), i.getRejectionReason(), null, null, initiativeViews.get(k), null));
+        }
+        // Reviewers must see members-only URLs too, so map as a signed-in viewer.
+        List<ResourceLinkResponse> resourceViews = resourceLinkService.toResponses(resources, REVIEWER_VIEWER);
+        for (int k = 0; k < resources.size(); k++) {
+            ResourceLink r = resources.get(k);
+            queue.add(new AdminListingResponse("RESOURCE", r.getId(), r.getListingStatus(), email.apply(r.getSubmittedByUserId()),
+                    null, r.getCreatedAt(), r.getRejectionReason(), null, null, null, resourceViews.get(k)));
+        }
         queue.sort(Comparator.comparing(AdminListingResponse::submittedAt));
         return queue;
     }
@@ -101,6 +144,20 @@ public class ListingReviewService {
                 c.setRejectionReason(reason);
                 c.setReviewedAt(now);
                 c.setReviewedBy(adminEmail);
+            }
+            case "INITIATIVE" -> {
+                Initiative i = initiativeRepository.findById(id).orElseThrow(() -> new NotFoundException("Listing not found"));
+                i.setListingStatus(status);
+                i.setRejectionReason(reason);
+                i.setReviewedAt(now);
+                i.setReviewedBy(adminEmail);
+            }
+            case "RESOURCE" -> {
+                ResourceLink r = resourceLinkRepository.findById(id).orElseThrow(() -> new NotFoundException("Listing not found"));
+                r.setListingStatus(status);
+                r.setRejectionReason(reason);
+                r.setReviewedAt(now);
+                r.setReviewedBy(adminEmail);
             }
             default -> throw new NotFoundException("Unknown listing kind");
         }

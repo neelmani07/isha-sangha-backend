@@ -64,8 +64,8 @@ app:
     # Private proof documents for teacher/center submissions (move to cloud storage for production).
     dir: ${UPLOADS_DIR:uploads}
   dev:
-    # Local development only: fill the map with sample meditators. Never enable in production.
-    seed-sample-meditators: ${SEED_SAMPLE_MEDITATORS:false}
+    # Local development only: sample meditators, initiatives and resource links. Never enable in production.
+    seed-sample-data: ${SEED_SAMPLE_DATA:${SEED_SAMPLE_MEDITATORS:false}}
 
 management:
   endpoints:

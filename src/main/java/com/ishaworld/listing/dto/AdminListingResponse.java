@@ -2,6 +2,8 @@ package com.ishaworld.listing.dto;
 
 import com.ishaworld.center.dto.CenterResponse;
 import com.ishaworld.common.enums.ListingStatus;
+import com.ishaworld.initiative.dto.InitiativeResponse;
+import com.ishaworld.resourcelink.dto.ResourceLinkResponse;
 import com.ishaworld.teacher.dto.TeacherResponse;
 import java.time.Instant;
 
@@ -15,6 +17,8 @@ public record AdminListingResponse(
         Instant submittedAt,
         String rejectionReason,
         TeacherResponse teacher,
-        CenterResponse center
+        CenterResponse center,
+        InitiativeResponse initiative,
+        ResourceLinkResponse resource
 ) {
 }

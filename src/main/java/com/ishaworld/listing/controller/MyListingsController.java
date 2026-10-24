@@ -1,12 +1,14 @@
 package com.ishaworld.listing.controller;
 
 import com.ishaworld.common.api.ApiResponse;
+import com.ishaworld.initiative.dto.InitiativeSubmissionRequest;
 import com.ishaworld.listing.dto.CenterSubmissionRequest;
 import com.ishaworld.listing.dto.MyListingResponse;
 import com.ishaworld.listing.dto.OwnListingResponse;
 import com.ishaworld.listing.dto.ProofUploadResponse;
 import com.ishaworld.listing.dto.TeacherSubmissionRequest;
 import com.ishaworld.listing.service.ListingSubmissionService;
+import com.ishaworld.resourcelink.dto.ResourceSubmissionRequest;
 import com.ishaworld.security.AuthenticatedUser;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -54,6 +56,50 @@ public class MyListingsController {
     @GetMapping("/listings/centers/{id}")
     ApiResponse<OwnListingResponse> ownCenter(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable Long id) {
         return ApiResponse.success(submissionService.ownCenter(user.id(), id));
+    }
+
+    @GetMapping("/listings/initiatives/{id}")
+    ApiResponse<OwnListingResponse> ownInitiative(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable Long id) {
+        return ApiResponse.success(submissionService.ownInitiative(user.id(), id));
+    }
+
+    @PostMapping("/listings/initiatives")
+    ApiResponse<MyListingResponse> submitInitiative(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @Valid @RequestBody InitiativeSubmissionRequest request
+    ) {
+        return ApiResponse.success(submissionService.submitInitiative(user.id(), request));
+    }
+
+    @PutMapping("/listings/initiatives/{id}")
+    ApiResponse<MyListingResponse> updateInitiative(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable Long id,
+            @Valid @RequestBody InitiativeSubmissionRequest request
+    ) {
+        return ApiResponse.success(submissionService.updateInitiative(user.id(), id, request));
+    }
+
+    @GetMapping("/listings/resources/{id}")
+    ApiResponse<OwnListingResponse> ownResource(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable Long id) {
+        return ApiResponse.success(submissionService.ownResource(user.id(), id));
+    }
+
+    @PostMapping("/listings/resources")
+    ApiResponse<MyListingResponse> submitResource(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @Valid @RequestBody ResourceSubmissionRequest request
+    ) {
+        return ApiResponse.success(submissionService.submitResource(user.id(), request));
+    }
+
+    @PutMapping("/listings/resources/{id}")
+    ApiResponse<MyListingResponse> updateResource(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable Long id,
+            @Valid @RequestBody ResourceSubmissionRequest request
+    ) {
+        return ApiResponse.success(submissionService.updateResource(user.id(), id, request));
     }
 
     @PostMapping("/listings/teachers")
