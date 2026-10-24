@@ -16,6 +16,7 @@ import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import lombok.Getter;
@@ -83,6 +84,15 @@ public class Teacher extends BaseEntity {
 
     @Column(name = "submitted_by_user_id")
     private Long submittedByUserId;
+
+    @Column(name = "rejection_reason", length = 500)
+    private String rejectionReason;
+
+    @Column(name = "reviewed_at")
+    private Instant reviewedAt;
+
+    @Column(name = "reviewed_by", length = 255)
+    private String reviewedBy;
 
     @ManyToMany
     @JoinTable(

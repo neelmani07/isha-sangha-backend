@@ -29,6 +29,8 @@ public class TeacherRepositoryImpl implements TeacherRepositoryCustom {
         StringBuilder base = new StringBuilder("""
                 FROM teacher t
                 WHERE t.city_id = :cityId
+                  AND t.active = TRUE
+                  AND t.listing_status = 'APPROVED'
                 """);
 
         if (q != null && !q.isBlank()) {

@@ -14,7 +14,7 @@ import org.springframework.data.repository.query.Param;
 
 public interface CenterRepository extends JpaRepository<Center, Long> {
 
-    Page<Center> findByType(CenterType type, Pageable pageable);
+    Page<Center> findByTypeAndActiveTrueAndListingStatus(CenterType type, ListingStatus listingStatus, Pageable pageable);
 
     Page<Center> findByCityId(Long cityId, Pageable pageable);
 
@@ -28,6 +28,7 @@ public interface CenterRepository extends JpaRepository<Center, Long> {
     @Query("""
             select c from Center c
             where c.city.id = :cityId
+            and c.active = true and c.listingStatus = com.ishaworld.common.enums.ListingStatus.APPROVED
             and (:type is null or c.type = :type)
             and (:q is null or :q = '' or lower(c.name) like lower(concat('%', :q, '%')))
             """)
@@ -38,7 +39,15 @@ public interface CenterRepository extends JpaRepository<Center, Long> {
             Pageable pageable
     );
 
-    List<Center> findTop10ByNameContainingIgnoreCase(String name);
+    List<Center> findTop10ByNameContainingIgnoreCaseAndActiveTrueAndListingStatus(String name, ListingStatus listingStatus);
+
+    Optional<Center> findBySlugAndListingStatus(String slug, ListingStatus listingStatus);
+
+    boolean existsBySlug(String slug);
+
+    List<Center> findBySubmittedByUserIdOrderByCreatedAtDesc(Long userId);
+
+    List<Center> findByListingStatusOrderByCreatedAtAsc(ListingStatus listingStatus);
 
     /** Active, approved centers: what the public map may show. */
     @EntityGraph(attributePaths = "city")

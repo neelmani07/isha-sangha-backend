@@ -8,6 +8,7 @@ import com.ishaworld.city.service.CityService;
 import com.ishaworld.common.SlugGenerator;
 import com.ishaworld.common.api.PageResponse;
 import com.ishaworld.common.enums.CenterType;
+import com.ishaworld.common.enums.ListingStatus;
 import com.ishaworld.exception.NotFoundException;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -32,21 +33,24 @@ public class CenterService {
             );
         }
 
-        var page = centerRepository.findAll(pageable);
-        if (type != null) {
-            page = centerRepository.findByType(type, pageable);
-        }
+        var page = type != null
+                ? centerRepository.findByTypeAndActiveTrueAndListingStatus(type, ListingStatus.APPROVED, pageable)
+                : centerRepository.findByActiveTrueAndListingStatus(ListingStatus.APPROVED, pageable);
         return PageResponse.from(page.map(this::toResponse));
     }
 
     @Transactional(readOnly = true)
     public CenterResponse findById(Long id) {
-        return toResponse(getCenter(id));
+        Center center = getCenter(id);
+        if (!center.isActive() || center.getListingStatus() != ListingStatus.APPROVED) {
+            throw new NotFoundException("Center not found");
+        }
+        return toResponse(center);
     }
 
     @Transactional(readOnly = true)
     public CenterResponse findBySlug(String slug) {
-        return toResponse(centerRepository.findBySlug(slug)
+        return toResponse(centerRepository.findBySlugAndListingStatus(slug, ListingStatus.APPROVED)
                 .orElseThrow(() -> new NotFoundException("Center not found")));
     }
 
@@ -96,7 +100,7 @@ public class CenterService {
         }
     }
 
-    private CenterResponse toResponse(Center center) {
+    public CenterResponse toResponse(Center center) {
         return new CenterResponse(
                 center.getId(),
                 center.getCity().getId(),

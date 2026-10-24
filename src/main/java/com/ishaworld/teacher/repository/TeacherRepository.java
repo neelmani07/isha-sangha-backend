@@ -22,16 +22,24 @@ public interface TeacherRepository extends JpaRepository<Teacher, Long>, Teacher
     @Query("select count(t) from Teacher t where t.city.country.id = :countryId")
     long countByCountryId(@Param("countryId") Long countryId);
 
-    @Query("select t from Teacher t where lower(t.city.name) = lower(:city)")
+    @Query("select t from Teacher t where lower(t.city.name) = lower(:city) and t.active = true and t.listingStatus = com.ishaworld.common.enums.ListingStatus.APPROVED")
     Page<Teacher> findByCityName(@Param("city") String city, Pageable pageable);
 
-    @Query("select t from Teacher t where lower(t.city.country.name) = lower(:country)")
+    @Query("select t from Teacher t where lower(t.city.country.name) = lower(:country) and t.active = true and t.listingStatus = com.ishaworld.common.enums.ListingStatus.APPROVED")
     Page<Teacher> findByCountryName(@Param("country") String country, Pageable pageable);
 
-    @Query("select distinct t from Teacher t join t.programs p where lower(p.name) = lower(:program)")
+    @Query("select distinct t from Teacher t join t.programs p where lower(p.name) = lower(:program) and t.active = true and t.listingStatus = com.ishaworld.common.enums.ListingStatus.APPROVED")
     Page<Teacher> findByProgramName(@Param("program") String program, Pageable pageable);
 
-    List<Teacher> findTop10ByNameContainingIgnoreCase(String name);
+    List<Teacher> findTop10ByNameContainingIgnoreCaseAndActiveTrueAndListingStatus(String name, ListingStatus listingStatus);
+
+    Optional<Teacher> findBySlugAndListingStatus(String slug, ListingStatus listingStatus);
+
+    boolean existsBySlug(String slug);
+
+    List<Teacher> findBySubmittedByUserIdOrderByCreatedAtDesc(Long userId);
+
+    List<Teacher> findByListingStatusOrderByCreatedAtAsc(ListingStatus listingStatus);
 
     /** Active, approved teachers: what the public map may show. */
     @EntityGraph(attributePaths = "city")

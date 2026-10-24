@@ -2,6 +2,7 @@ package com.ishaworld.search.service;
 
 import com.ishaworld.center.repository.CenterRepository;
 import com.ishaworld.city.repository.CityRepository;
+import com.ishaworld.common.enums.ListingStatus;
 import com.ishaworld.country.repository.CountryRepository;
 import com.ishaworld.search.dto.SearchResultResponse;
 import com.ishaworld.state.repository.StateRepository;
@@ -73,7 +74,7 @@ public class SearchService {
                         toDouble(city.getLongitude())
                 )));
 
-        centerRepository.findTop10ByNameContainingIgnoreCase(query)
+        centerRepository.findTop10ByNameContainingIgnoreCaseAndActiveTrueAndListingStatus(query, ListingStatus.APPROVED)
                 .forEach(center -> results.add(new SearchResultResponse(
                         "CENTER",
                         center.getId(),
@@ -83,7 +84,7 @@ public class SearchService {
                         toDouble(center.getLongitude())
                 )));
 
-        teacherRepository.findTop10ByNameContainingIgnoreCase(query)
+        teacherRepository.findTop10ByNameContainingIgnoreCaseAndActiveTrueAndListingStatus(query, ListingStatus.APPROVED)
                 .forEach(teacher -> results.add(new SearchResultResponse(
                         "TEACHER",
                         teacher.getId(),

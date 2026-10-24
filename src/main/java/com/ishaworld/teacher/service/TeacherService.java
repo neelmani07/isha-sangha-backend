@@ -3,6 +3,7 @@ package com.ishaworld.teacher.service;
 import com.ishaworld.city.service.CityService;
 import com.ishaworld.common.SlugGenerator;
 import com.ishaworld.common.api.PageResponse;
+import com.ishaworld.common.enums.ListingStatus;
 import com.ishaworld.exception.NotFoundException;
 import com.ishaworld.program.dto.ProgramResponse;
 import com.ishaworld.program.mapper.ProgramMapper;
@@ -56,7 +57,7 @@ public class TeacherService {
             );
         }
 
-        var page = teacherRepository.findAll(pageable);
+        var page = teacherRepository.findByActiveTrueAndListingStatus(ListingStatus.APPROVED, pageable);
         if (city != null && !city.isBlank()) {
             page = teacherRepository.findByCityName(city, pageable);
         } else if (country != null && !country.isBlank()) {
@@ -69,12 +70,16 @@ public class TeacherService {
 
     @Transactional(readOnly = true)
     public TeacherResponse findById(Long id) {
-        return toResponse(getTeacher(id));
+        Teacher teacher = getTeacher(id);
+        if (!teacher.isActive() || teacher.getListingStatus() != ListingStatus.APPROVED) {
+            throw new NotFoundException("Teacher not found");
+        }
+        return toResponse(teacher);
     }
 
     @Transactional(readOnly = true)
     public TeacherResponse findBySlug(String slug) {
-        return toResponse(teacherRepository.findBySlug(slug)
+        return toResponse(teacherRepository.findBySlugAndListingStatus(slug, ListingStatus.APPROVED)
                 .orElseThrow(() -> new NotFoundException("Teacher not found")));
     }
 
@@ -126,7 +131,7 @@ public class TeacherService {
         teacher.setPrograms(new LinkedHashSet<>(programService.findByIds(request.programIds())));
     }
 
-    private TeacherResponse toResponse(Teacher teacher) {
+    public TeacherResponse toResponse(Teacher teacher) {
         var programs = teacher.getPrograms()
                 .stream()
                 .map(programMapper::toResponse)
