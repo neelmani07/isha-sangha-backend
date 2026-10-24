@@ -1,0 +1,23 @@
+.gradle/
+build/
+out/
+*.class
+
+.env
+.env.*
+!.env.example
+
+.idea/
+*.iml
+.vscode/
+
+bin/
+HELP.md
+*.log
+
+# Local file uploads (proof documents etc.) in development
+uploads/
+
+# OS / tooling
+.DS_Store
+.claude/settings.local.json

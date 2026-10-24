@@ -1,0 +1,67 @@
+spring:
+  application:
+    name: isha-world-backend
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/isha_world}
+    username: ${DB_USERNAME:${USER:postgres}}
+    password: ${DB_PASSWORD:}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true
+  # Email delivery for sign-in codes. Leave MAIL_HOST unset in dev to log codes to the console.
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+
+server:
+  port: ${PORT:8080}
+
+app:
+  env: ${APP_ENV:dev}
+  frontend-origin: ${FRONTEND_ORIGIN:http://localhost:5173}
+  jwt:
+    secret: ${JWT_SECRET:change-me}
+    expiry-hours: 24
+    user-expiry-days: 30
+  auth:
+    google:
+      # OAuth 2.0 Web client ID from Google Cloud Console. Blank disables Google sign-in.
+      client-id: ${GOOGLE_CLIENT_ID:}
+    otp:
+      from: ${OTP_FROM_EMAIL:${app.site.contact-email}}
+  # Public identity of the site and the NGO behind it. Rename the site here only.
+  site:
+    name: ${SITE_NAME:Isha Sangha}
+    tagline: ${SITE_TAGLINE:A community of meditators, volunteers and seekers}
+    contact-email: ${SITE_CONTACT_EMAIL:hello@example.org}
+    organization:
+      legal-name: ${ORG_LEGAL_NAME:}
+      registration-number: ${ORG_REGISTRATION_NUMBER:}
+      tax-exemption: ${ORG_TAX_EXEMPTION:}
+      address: ${ORG_ADDRESS:}
+    disclaimer: ${SITE_DISCLAIMER:This is an independent volunteer community. It is not affiliated with, endorsed by, or operated by Isha Foundation.}
+  admin:
+    default-email: ${ADMIN_DEFAULT_EMAIL:admin@ishaworld.local}
+    default-password: ${ADMIN_DEFAULT_PASSWORD:admin123}
+  aws:
+    bucket-name: ${AWS_BUCKET_NAME:}
+  dev:
+    # Local development only: fill the map with sample meditators. Never enable in production.
+    seed-sample-meditators: ${SEED_SAMPLE_MEDITATORS:false}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
