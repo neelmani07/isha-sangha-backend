@@ -43,7 +43,7 @@ public class CenterService {
     public CenterResponse findById(Long id) {
         Center center = getCenter(id);
         if (!center.isActive() || center.getListingStatus() != ListingStatus.APPROVED) {
-            throw new NotFoundException("Center not found");
+            throw new NotFoundException("Centre not found");
         }
         return toResponse(center);
     }
@@ -51,7 +51,7 @@ public class CenterService {
     @Transactional(readOnly = true)
     public CenterResponse findBySlug(String slug) {
         return toResponse(centerRepository.findBySlugAndListingStatus(slug, ListingStatus.APPROVED)
-                .orElseThrow(() -> new NotFoundException("Center not found")));
+                .orElseThrow(() -> new NotFoundException("Centre not found")));
     }
 
     @Transactional
@@ -75,7 +75,7 @@ public class CenterService {
 
     public Center getCenter(Long id) {
         return centerRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Center not found"));
+                .orElseThrow(() -> new NotFoundException("Centre not found"));
     }
 
     private void apply(Center center, CenterUpsertRequest request) {

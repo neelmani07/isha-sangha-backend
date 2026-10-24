@@ -42,6 +42,9 @@ public class SearchService {
             return List.of();
         }
 
+        // Names use Indian spelling ("Centre"), so also accept American spelling in searches.
+        query = query.trim().replaceAll("(?i)center", "centre").replaceAll("(?i)program(?!me)", "programme");
+
         List<SearchResultResponse> results = new ArrayList<>();
 
         countryRepository.findTop10ByNameContainingIgnoreCase(query)

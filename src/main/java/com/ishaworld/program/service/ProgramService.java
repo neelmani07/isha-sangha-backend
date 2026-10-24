@@ -55,7 +55,7 @@ public class ProgramService {
 
     public Program getProgram(Long id) {
         return programRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Program not found"));
+                .orElseThrow(() -> new NotFoundException("Programme not found"));
     }
 
     public List<Program> findByIds(Collection<Long> ids) {
