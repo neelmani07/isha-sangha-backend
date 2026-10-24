@@ -9,6 +9,7 @@ import com.ishaworld.city.entity.CommunityStats;
 import com.ishaworld.city.repository.CityRepository;
 import com.ishaworld.city.repository.CommunityStatsRepository;
 import com.ishaworld.common.SlugGenerator;
+import com.ishaworld.common.enums.ListingStatus;
 import com.ishaworld.common.api.PageResponse;
 import com.ishaworld.country.service.CountryService;
 import com.ishaworld.exception.NotFoundException;
@@ -55,7 +56,9 @@ public class CityService {
 
     @Transactional(readOnly = true)
     public CityResponse findBySlug(String slug) {
+        // Public page: only approved, visible cities (member-added ones wait for review; admins can hide any).
         return toResponse(cityRepository.findBySlug(slug)
+                .filter(city -> city.isActive() && city.getListingStatus() == ListingStatus.APPROVED)
                 .orElseThrow(() -> new NotFoundException("City not found")));
     }
 

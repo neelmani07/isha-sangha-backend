@@ -4,6 +4,8 @@ import com.ishaworld.center.dto.CenterResponse;
 import com.ishaworld.common.enums.ListingStatus;
 import com.ishaworld.initiative.dto.InitiativeResponse;
 import com.ishaworld.resourcelink.dto.ResourceLinkResponse;
+import com.ishaworld.shop.dto.ShopListingResponse;
+import com.ishaworld.story.dto.StoryResponse;
 import com.ishaworld.teacher.dto.TeacherResponse;
 
 /** A submitter's own listing with everything needed to edit and resubmit it. */
@@ -14,6 +16,8 @@ public record OwnListingResponse(
         TeacherResponse teacher,
         CenterResponse center,
         InitiativeResponse initiative,
-        ResourceLinkResponse resource
+        ResourceLinkResponse resource,
+        StoryResponse story,
+        ShopListingResponse product
 ) {
 }

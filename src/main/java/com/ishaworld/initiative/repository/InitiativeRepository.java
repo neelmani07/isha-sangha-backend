@@ -22,6 +22,9 @@ public interface InitiativeRepository extends JpaRepository<Initiative, Long> {
     boolean existsBySlug(String slug);
 
     @EntityGraph(attributePaths = "city")
+    List<Initiative> findTop50ByTitleContainingIgnoreCaseOrderByTitle(String title);
+
+    @EntityGraph(attributePaths = "city")
     List<Initiative> findBySubmittedByUserIdOrderByCreatedAtDesc(Long userId);
 
     @EntityGraph(attributePaths = "city")

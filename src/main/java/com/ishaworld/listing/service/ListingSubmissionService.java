@@ -24,6 +24,14 @@ import com.ishaworld.resourcelink.entity.ResourceLink;
 import com.ishaworld.resourcelink.repository.ResourceLinkRepository;
 import com.ishaworld.resourcelink.service.ResourceLinkService;
 import com.ishaworld.storage.ProofStorage;
+import com.ishaworld.shop.dto.ShopListingRequest;
+import com.ishaworld.shop.entity.ShopListing;
+import com.ishaworld.shop.repository.ShopListingRepository;
+import com.ishaworld.shop.service.ShopService;
+import com.ishaworld.story.dto.StorySubmissionRequest;
+import com.ishaworld.story.entity.Story;
+import com.ishaworld.story.repository.StoryRepository;
+import com.ishaworld.story.service.StoryService;
 import com.ishaworld.teacher.entity.Teacher;
 import com.ishaworld.teacher.repository.TeacherRepository;
 import com.ishaworld.teacher.service.TeacherService;
@@ -58,6 +66,10 @@ public class ListingSubmissionService {
     private final InitiativeRepository initiativeRepository;
     private final ResourceLinkService resourceLinkService;
     private final ResourceLinkRepository resourceLinkRepository;
+    private final StoryService storyService;
+    private final StoryRepository storyRepository;
+    private final ShopService shopService;
+    private final ShopListingRepository shopListingRepository;
     private final CenterService centerService;
 
     public ListingSubmissionService(
@@ -71,7 +83,11 @@ public class ListingSubmissionService {
             InitiativeService initiativeService,
             InitiativeRepository initiativeRepository,
             ResourceLinkService resourceLinkService,
-            ResourceLinkRepository resourceLinkRepository
+            ResourceLinkRepository resourceLinkRepository,
+            StoryService storyService,
+            StoryRepository storyRepository,
+            ShopService shopService,
+            ShopListingRepository shopListingRepository
     ) {
         this.teacherRepository = teacherRepository;
         this.centerRepository = centerRepository;
@@ -83,6 +99,10 @@ public class ListingSubmissionService {
         this.initiativeRepository = initiativeRepository;
         this.resourceLinkService = resourceLinkService;
         this.resourceLinkRepository = resourceLinkRepository;
+        this.storyService = storyService;
+        this.storyRepository = storyRepository;
+        this.shopService = shopService;
+        this.shopListingRepository = shopListingRepository;
         this.centerService = centerService;
     }
 
@@ -101,6 +121,8 @@ public class ListingSubmissionService {
                 c.getListingStatus(), c.getRejectionReason(), c.getCreatedAt())));
         initiativeRepository.findBySubmittedByUserIdOrderByCreatedAtDesc(userId).forEach(i -> listings.add(toMine(i)));
         resourceLinkRepository.findBySubmittedByUserIdOrderByCreatedAtDesc(userId).forEach(r -> listings.add(toMine(r)));
+        storyRepository.findBySubmittedByUserIdOrderByCreatedAtDesc(userId).forEach(s -> listings.add(toMine(s)));
+        shopListingRepository.findBySubmittedByUserIdOrderByCreatedAtDesc(userId).forEach(p -> listings.add(toMine(p)));
         listings.sort(Comparator.comparing(MyListingResponse::submittedAt).reversed());
         return listings;
     }
@@ -110,7 +132,7 @@ public class ListingSubmissionService {
         Teacher t = teacherRepository.findById(id)
                 .filter(found -> Objects.equals(found.getSubmittedByUserId(), userId))
                 .orElseThrow(() -> new NotFoundException("Listing not found"));
-        return new OwnListingResponse(t.getListingStatus(), t.getRejectionReason(), t.getProofUrl(), teacherService.toResponse(t), null, null, null);
+        return new OwnListingResponse(t.getListingStatus(), t.getRejectionReason(), t.getProofUrl(), teacherService.toResponse(t), null, null, null, null, null);
     }
 
     @Transactional(readOnly = true)
@@ -118,7 +140,41 @@ public class ListingSubmissionService {
         Center c = centerRepository.findById(id)
                 .filter(found -> Objects.equals(found.getSubmittedByUserId(), userId))
                 .orElseThrow(() -> new NotFoundException("Listing not found"));
-        return new OwnListingResponse(c.getListingStatus(), c.getRejectionReason(), c.getProofUrl(), null, centerService.toResponse(c), null, null);
+        return new OwnListingResponse(c.getListingStatus(), c.getRejectionReason(), c.getProofUrl(), null, centerService.toResponse(c), null, null, null, null);
+    }
+
+    @Transactional
+    public MyListingResponse submitProduct(Long userId, ShopListingRequest request) {
+        return toMine(shopService.submit(userId, request));
+    }
+
+    @Transactional
+    public MyListingResponse updateProduct(Long userId, Long id, ShopListingRequest request) {
+        return toMine(shopService.update(userId, id, request));
+    }
+
+    @Transactional(readOnly = true)
+    public OwnListingResponse ownProduct(Long userId, Long id) {
+        ShopListing p = shopService.own(userId, id);
+        return new OwnListingResponse(p.getListingStatus(), p.getRejectionReason(), p.getPhotoKey(), null, null, null, null, null,
+                ShopService.toResponse(p));
+    }
+
+    @Transactional
+    public MyListingResponse submitStory(Long userId, StorySubmissionRequest request) {
+        return toMine(storyService.submit(userId, request));
+    }
+
+    @Transactional
+    public MyListingResponse updateStory(Long userId, Long id, StorySubmissionRequest request) {
+        return toMine(storyService.update(userId, id, request));
+    }
+
+    @Transactional(readOnly = true)
+    public OwnListingResponse ownStory(Long userId, Long id) {
+        Story s = storyService.own(userId, id);
+        return new OwnListingResponse(s.getListingStatus(), s.getRejectionReason(), s.getPhotoKey(), null, null, null, null,
+                storyService.toResponses(List.of(s), userId).get(0), null);
     }
 
     @Transactional
@@ -135,7 +191,7 @@ public class ListingSubmissionService {
     public OwnListingResponse ownInitiative(Long userId, Long id) {
         Initiative i = initiativeService.own(userId, id);
         return new OwnListingResponse(i.getListingStatus(), i.getRejectionReason(), i.getPhotoKey(), null, null,
-                initiativeService.toResponses(List.of(i), userId).get(0), null);
+                initiativeService.toResponses(List.of(i), userId).get(0), null, null, null);
     }
 
     @Transactional
@@ -152,7 +208,7 @@ public class ListingSubmissionService {
     public OwnListingResponse ownResource(Long userId, Long id) {
         ResourceLink r = resourceLinkService.own(userId, id);
         return new OwnListingResponse(r.getListingStatus(), r.getRejectionReason(), null, null, null, null,
-                resourceLinkService.toResponses(List.of(r), userId).get(0));
+                resourceLinkService.toResponses(List.of(r), userId).get(0), null, null);
     }
 
     @Transactional
@@ -275,6 +331,17 @@ public class ListingSubmissionService {
             slug = base + "-" + i;
         }
         return slug;
+    }
+
+    private static MyListingResponse toMine(ShopListing p) {
+        return new MyListingResponse("PRODUCT", p.getId(), p.getTitle(), p.getSlug(), p.getCity().getName(),
+                p.getListingStatus(), p.getRejectionReason(), p.getCreatedAt());
+    }
+
+    private static MyListingResponse toMine(Story s) {
+        String place = s.getCenter() != null ? s.getCenter().getName() : s.getCity() != null ? s.getCity().getName() : null;
+        return new MyListingResponse("STORY", s.getId(), s.getTitle(), s.getSlug(), place,
+                s.getListingStatus(), s.getRejectionReason(), s.getCreatedAt());
     }
 
     private static MyListingResponse toMine(Initiative i) {

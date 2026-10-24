@@ -14,6 +14,9 @@ public interface MeditatorRepository extends JpaRepository<Meditator, Long> {
     Optional<Meditator> findByAppUserId(Long appUserId);
 
     @EntityGraph(attributePaths = "city")
+    List<Meditator> findTop50ByDisplayNameContainingIgnoreCaseOrderByDisplayName(String displayName);
+
+    @EntityGraph(attributePaths = "city")
     Page<Meditator> findByVisibleTrueAndActiveTrue(Pageable pageable);
 
     @EntityGraph(attributePaths = "city")

@@ -3,6 +3,9 @@ package com.ishaworld.listing.service;
 import com.ishaworld.center.entity.Center;
 import com.ishaworld.center.repository.CenterRepository;
 import com.ishaworld.center.service.CenterService;
+import com.ishaworld.city.dto.PickedCityResponse;
+import com.ishaworld.city.entity.City;
+import com.ishaworld.city.repository.CityRepository;
 import com.ishaworld.common.enums.ListingStatus;
 import com.ishaworld.exception.NotFoundException;
 import com.ishaworld.initiative.dto.InitiativeResponse;
@@ -14,6 +17,13 @@ import com.ishaworld.resourcelink.dto.ResourceLinkResponse;
 import com.ishaworld.resourcelink.entity.ResourceLink;
 import com.ishaworld.resourcelink.repository.ResourceLinkRepository;
 import com.ishaworld.resourcelink.service.ResourceLinkService;
+import com.ishaworld.shop.entity.ShopListing;
+import com.ishaworld.shop.repository.ShopListingRepository;
+import com.ishaworld.shop.service.ShopService;
+import com.ishaworld.story.dto.StoryResponse;
+import com.ishaworld.story.entity.Story;
+import com.ishaworld.story.repository.StoryRepository;
+import com.ishaworld.story.service.StoryService;
 import com.ishaworld.teacher.entity.Teacher;
 import com.ishaworld.teacher.repository.TeacherRepository;
 import com.ishaworld.teacher.service.TeacherService;
@@ -44,6 +54,10 @@ public class ListingReviewService {
     private final InitiativeService initiativeService;
     private final ResourceLinkRepository resourceLinkRepository;
     private final ResourceLinkService resourceLinkService;
+    private final CityRepository cityRepository;
+    private final StoryRepository storyRepository;
+    private final StoryService storyService;
+    private final ShopListingRepository shopListingRepository;
 
     /** Any non-null viewer id unlocks members-only links; reviewers never vote, so 0 is safe. */
     private static final Long REVIEWER_VIEWER = 0L;
@@ -57,7 +71,11 @@ public class ListingReviewService {
             InitiativeRepository initiativeRepository,
             InitiativeService initiativeService,
             ResourceLinkRepository resourceLinkRepository,
-            ResourceLinkService resourceLinkService
+            ResourceLinkService resourceLinkService,
+            CityRepository cityRepository,
+            StoryRepository storyRepository,
+            StoryService storyService,
+            ShopListingRepository shopListingRepository
     ) {
         this.teacherRepository = teacherRepository;
         this.centerRepository = centerRepository;
@@ -68,6 +86,10 @@ public class ListingReviewService {
         this.initiativeService = initiativeService;
         this.resourceLinkRepository = resourceLinkRepository;
         this.resourceLinkService = resourceLinkService;
+        this.cityRepository = cityRepository;
+        this.storyRepository = storyRepository;
+        this.storyService = storyService;
+        this.shopListingRepository = shopListingRepository;
     }
 
     @Transactional(readOnly = true)
@@ -94,25 +116,53 @@ public class ListingReviewService {
         List<AdminListingResponse> queue = new ArrayList<>();
         teachers.forEach(t -> queue.add(new AdminListingResponse("TEACHER", t.getId(), t.getListingStatus(),
                 email.apply(t.getSubmittedByUserId()), t.getProofUrl(), t.getCreatedAt(), t.getRejectionReason(),
-                teacherService.toResponse(t), null, null, null)));
+                teacherService.toResponse(t), null, null, null, null, null, null)));
         centers.forEach(c -> queue.add(new AdminListingResponse("CENTER", c.getId(), c.getListingStatus(),
                 email.apply(c.getSubmittedByUserId()), c.getProofUrl(), c.getCreatedAt(), c.getRejectionReason(),
-                null, centerService.toResponse(c), null, null)));
+                null, centerService.toResponse(c), null, null, null, null, null)));
         List<InitiativeResponse> initiativeViews = initiativeService.toResponses(initiatives, null);
         for (int k = 0; k < initiatives.size(); k++) {
             Initiative i = initiatives.get(k);
             queue.add(new AdminListingResponse("INITIATIVE", i.getId(), i.getListingStatus(), email.apply(i.getSubmittedByUserId()),
-                    null, i.getCreatedAt(), i.getRejectionReason(), null, null, initiativeViews.get(k), null));
+                    null, i.getCreatedAt(), i.getRejectionReason(), null, null, initiativeViews.get(k), null, null, null, null));
         }
         // Reviewers must see members-only URLs too, so map as a signed-in viewer.
         List<ResourceLinkResponse> resourceViews = resourceLinkService.toResponses(resources, REVIEWER_VIEWER);
         for (int k = 0; k < resources.size(); k++) {
             ResourceLink r = resources.get(k);
             queue.add(new AdminListingResponse("RESOURCE", r.getId(), r.getListingStatus(), email.apply(r.getSubmittedByUserId()),
-                    null, r.getCreatedAt(), r.getRejectionReason(), null, null, null, resourceViews.get(k)));
+                    null, r.getCreatedAt(), r.getRejectionReason(), null, null, null, resourceViews.get(k), null, null, null));
+        }
+        for (City c : cityRepository.findByListingStatusOrderByCreatedAtAsc(status)) {
+            if (c.getSubmittedByUserId() == null) {
+                continue;
+            }
+            PickedCityResponse view = new PickedCityResponse(c.getId(), c.getName(), c.getState().getName(), c.getCountry().getName(),
+                    c.getLatitude().doubleValue(), c.getLongitude().doubleValue(), c.getListingStatus());
+            queue.add(new AdminListingResponse("CITY", c.getId(), c.getListingStatus(), emailOf(c.getSubmittedByUserId()),
+                    null, c.getCreatedAt(), c.getRejectionReason(), null, null, null, null, view, null, null));
+        }
+        List<Story> stories = storyRepository.findByListingStatusOrderByCreatedAtAsc(status).stream()
+                .filter(st -> st.getSubmittedByUserId() != null).toList();
+        List<StoryResponse> storyViews = storyService.toResponses(stories, null);
+        for (int k = 0; k < stories.size(); k++) {
+            Story st = stories.get(k);
+            queue.add(new AdminListingResponse("STORY", st.getId(), st.getListingStatus(), emailOf(st.getSubmittedByUserId()),
+                    null, st.getCreatedAt(), st.getRejectionReason(), null, null, null, null, null, storyViews.get(k), null));
+        }
+        for (ShopListing p : shopListingRepository.findByListingStatusOrderByCreatedAtAsc(status)) {
+            if (p.getSubmittedByUserId() == null) {
+                continue;
+            }
+            queue.add(new AdminListingResponse("PRODUCT", p.getId(), p.getListingStatus(), emailOf(p.getSubmittedByUserId()),
+                    null, p.getCreatedAt(), p.getRejectionReason(), null, null, null, null, null, null, ShopService.toResponse(p)));
         }
         queue.sort(Comparator.comparing(AdminListingResponse::submittedAt));
         return queue;
+    }
+
+    private String emailOf(Long userId) {
+        return appUserRepository.findById(userId).map(AppUser::getEmail).orElse("unknown");
     }
 
     /** Approved submissions come with checked proof, so they also get the verified badge. */
@@ -158,6 +208,30 @@ public class ListingReviewService {
                 r.setRejectionReason(reason);
                 r.setReviewedAt(now);
                 r.setReviewedBy(adminEmail);
+            }
+            case "CITY" -> {
+                City c = cityRepository.findById(id).orElseThrow(() -> new NotFoundException("Listing not found"));
+                c.setListingStatus(status);
+                c.setRejectionReason(reason);
+                c.setReviewedAt(now);
+                c.setReviewedBy(adminEmail);
+            }
+            case "STORY" -> {
+                Story st = storyRepository.findById(id).orElseThrow(() -> new NotFoundException("Listing not found"));
+                st.setListingStatus(status);
+                st.setRejectionReason(reason);
+                st.setReviewedAt(now);
+                st.setReviewedBy(adminEmail);
+                if (status == ListingStatus.APPROVED && st.getPublishedAt() == null) {
+                    st.setPublishedAt(now);
+                }
+            }
+            case "PRODUCT" -> {
+                ShopListing p = shopListingRepository.findById(id).orElseThrow(() -> new NotFoundException("Listing not found"));
+                p.setListingStatus(status);
+                p.setRejectionReason(reason);
+                p.setReviewedAt(now);
+                p.setReviewedBy(adminEmail);
             }
             default -> throw new NotFoundException("Unknown listing kind");
         }

@@ -50,8 +50,14 @@ public class CenterService {
 
     @Transactional(readOnly = true)
     public CenterResponse findBySlug(String slug) {
-        return toResponse(centerRepository.findBySlugAndListingStatus(slug, ListingStatus.APPROVED)
+        return toResponse(centerRepository.findBySlugAndActiveTrueAndListingStatus(slug, ListingStatus.APPROVED)
                 .orElseThrow(() -> new NotFoundException("Centre not found")));
+    }
+
+    /** Any centre, whatever its status, for admin edit forms. */
+    @Transactional(readOnly = true)
+    public CenterResponse findForAdmin(Long id) {
+        return toResponse(getCenter(id));
     }
 
     @Transactional

@@ -33,9 +33,12 @@ public interface TeacherRepository extends JpaRepository<Teacher, Long>, Teacher
 
     List<Teacher> findTop10ByNameContainingIgnoreCaseAndActiveTrueAndListingStatus(String name, ListingStatus listingStatus);
 
-    Optional<Teacher> findBySlugAndListingStatus(String slug, ListingStatus listingStatus);
+    Optional<Teacher> findBySlugAndActiveTrueAndListingStatus(String slug, ListingStatus listingStatus);
 
     boolean existsBySlug(String slug);
+
+    @EntityGraph(attributePaths = "city")
+    List<Teacher> findTop50ByNameContainingIgnoreCaseOrderByName(String name);
 
     List<Teacher> findBySubmittedByUserIdOrderByCreatedAtDesc(Long userId);
 

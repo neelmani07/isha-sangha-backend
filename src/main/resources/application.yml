@@ -5,6 +5,11 @@ spring:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/isha_world}
     username: ${DB_USERNAME:${USER:postgres}}
     password: ${DB_PASSWORD:}
+  data:
+    web:
+      pageable:
+        # Nobody can ask for huge pages (e.g. ?size=100000) and overload the database.
+        max-page-size: 200
   jpa:
     hibernate:
       ddl-auto: validate

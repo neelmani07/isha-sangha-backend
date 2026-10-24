@@ -23,6 +23,9 @@ public interface ResourceLinkRepository extends JpaRepository<ResourceLink, Long
 
     boolean existsByUrlIgnoreCaseAndListingStatusNot(String url, ListingStatus listingStatus);
 
+    @EntityGraph(attributePaths = "city")
+    List<ResourceLink> findTop50ByTitleContainingIgnoreCaseOrderByTitle(String title);
+
     /** Rows of [resourceId, helpfulCount]. */
     @Query(value = "SELECT resource_id, COUNT(*) FROM resource_vote WHERE resource_id IN (:ids) GROUP BY resource_id", nativeQuery = true)
     List<Object[]> countVotes(@Param("ids") Collection<Long> ids);
