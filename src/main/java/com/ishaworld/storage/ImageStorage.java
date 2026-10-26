@@ -4,22 +4,17 @@ import com.ishaworld.exception.BusinessException;
 import com.ishaworld.exception.NotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
  * Public images members upload with their listings (e.g. an initiative photo). Unlike proofs these are
- * shown to everyone. Stored on local disk for now; move to cloud storage + CDN when deploying.
+ * shown to everyone. Stored through {@link ObjectStore}: local disk in dev, a bucket in production.
  */
 @Component
 public class ImageStorage {
@@ -33,11 +28,12 @@ public class ImageStorage {
             "image/webp", "webp");
     private static final Pattern KEY = Pattern.compile("^\\d+-[0-9a-f\\-]{36}\\.(jpg|png|webp)$");
 
-    private final Path root;
+    private static final String FOLDER = "images/";
 
-    public ImageStorage(@Value("${app.uploads.dir:uploads}") String dir) throws IOException {
-        this.root = Path.of(dir, "images").toAbsolutePath().normalize();
-        Files.createDirectories(root);
+    private final ObjectStore store;
+
+    public ImageStorage(ObjectStore store) {
+        this.store = store;
     }
 
     public String store(Long userId, MultipartFile file) {
@@ -54,7 +50,7 @@ public class ImageStorage {
         }
         String key = userId + "-" + UUID.randomUUID() + "." + extension;
         try (InputStream in = file.getInputStream()) {
-            Files.copy(in, root.resolve(key), StandardCopyOption.REPLACE_EXISTING);
+            store.put(FOLDER + key, in, file.getSize(), contentType);
         } catch (IOException ex) {
             throw new BusinessException("Could not save the photo. Please try again.");
         }
@@ -62,18 +58,18 @@ public class ImageStorage {
     }
 
     public boolean isOwnedBy(String key, Long userId) {
-        return key != null && KEY.matcher(key).matches() && key.startsWith(userId + "-") && Files.exists(root.resolve(key));
+        return key != null && KEY.matcher(key).matches() && key.startsWith(userId + "-") && store.exists(FOLDER + key);
     }
 
     public Resource load(String key) {
         if (key == null || !KEY.matcher(key).matches()) {
             throw new NotFoundException("Image not found");
         }
-        Path path = root.resolve(key).normalize();
-        if (!path.startsWith(root) || !Files.exists(path)) {
+        Resource resource = store.get(FOLDER + key);
+        if (resource == null) {
             throw new NotFoundException("Image not found");
         }
-        return new FileSystemResource(path);
+        return resource;
     }
 
     public static String contentTypeOf(String key) {

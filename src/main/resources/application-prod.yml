@@ -1,0 +1,37 @@
+# Production settings. Turn on with SPRING_PROFILES_ACTIVE=prod.
+# Every secret comes from environment variables; see DEPLOYMENT.md.
+spring:
+  flyway:
+    placeholders:
+      removeDemoData: true
+  jpa:
+    properties:
+      hibernate:
+        format_sql: false
+  datasource:
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+
+server:
+  # Behind the host's load balancer: read the visitor's real address from X-Forwarded-For,
+  # trusting only private-network proxies (so visitors can't fake it to dodge rate limits).
+  forward-headers-strategy: native
+  shutdown: graceful
+  compression:
+    enabled: true
+    mime-types: application/json
+
+app:
+  env: prod
+  frontend-origin: ${FRONTEND_ORIGIN:}
+  jwt:
+    secret: ${JWT_SECRET:}
+  storage:
+    type: ${STORAGE_TYPE:s3}
+  dev:
+    seed-sample-data: false
+
+management:
+  endpoint:
+    health:
+      show-details: never

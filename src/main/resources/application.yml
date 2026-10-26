@@ -19,6 +19,9 @@ spring:
         format_sql: true
   flyway:
     enabled: true
+    placeholders:
+      # true only in production (see application-prod.yml): V13 then removes the V2/V3 demo map data.
+      removeDemoData: ${REMOVE_DEMO_DATA:false}
   servlet:
     multipart:
       max-file-size: 5MB
@@ -61,12 +64,21 @@ app:
       address: ${ORG_ADDRESS:}
     disclaimer: ${SITE_DISCLAIMER:This is an independent volunteer community. It is not affiliated with, endorsed by, or operated by Isha Foundation.}
   admin:
+    # First super admin, created once if missing. Leave the password blank after the first start.
     default-email: ${ADMIN_DEFAULT_EMAIL:admin@ishaworld.local}
-    default-password: ${ADMIN_DEFAULT_PASSWORD:admin123}
-  aws:
-    bucket-name: ${AWS_BUCKET_NAME:}
+    default-password: ${ADMIN_DEFAULT_PASSWORD:}
+  storage:
+    # local = files under UPLOADS_DIR (dev, or a server with a persistent disk); s3 = an S3-compatible bucket.
+    type: ${STORAGE_TYPE:local}
+    s3:
+      # Private bucket. For Cloudflare R2 / DigitalOcean Spaces set the endpoint; for AWS S3 leave it blank.
+      bucket: ${STORAGE_BUCKET:}
+      region: ${STORAGE_REGION:auto}
+      endpoint: ${STORAGE_ENDPOINT:}
+      access-key: ${STORAGE_ACCESS_KEY:}
+      secret-key: ${STORAGE_SECRET_KEY:}
   uploads:
-    # Private proof documents for teacher/center submissions (move to cloud storage for production).
+    # Local storage folder (images/ and proofs/ inside it) when app.storage.type=local.
     dir: ${UPLOADS_DIR:uploads}
   dev:
     # Local development only: sample meditators, initiatives and resource links. Never enable in production.

@@ -1,0 +1,10 @@
+.gradle
+build
+out
+uploads
+.env
+.env.*
+.idea
+.vscode
+.claude
+*.log

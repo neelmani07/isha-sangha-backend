@@ -4,22 +4,17 @@ import com.ishaworld.exception.BusinessException;
 import com.ishaworld.exception.NotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * Stores proof documents (certificates, letters) for teacher and center submissions on local disk.
- * Proofs are private: only admins can read them back. Swap for cloud storage when deploying.
+ * Stores proof documents (certificates, letters) for teacher and center submissions through {@link ObjectStore}.
+ * Proofs are private: only admins can read them back.
  *
  * Keys look like "{userId}-{uuid}.pdf" so a member can only attach proofs they uploaded themselves.
  */
@@ -34,11 +29,12 @@ public class ProofStorage {
             "image/webp", "webp");
     private static final Pattern KEY = Pattern.compile("^\\d+-[0-9a-f\\-]{36}\\.(pdf|jpg|png|webp)$");
 
-    private final Path root;
+    private static final String FOLDER = "proofs/";
 
-    public ProofStorage(@Value("${app.uploads.dir:uploads}") String dir) throws IOException {
-        this.root = Path.of(dir, "proofs").toAbsolutePath().normalize();
-        Files.createDirectories(root);
+    private final ObjectStore store;
+
+    public ProofStorage(ObjectStore store) {
+        this.store = store;
     }
 
     public String store(Long userId, MultipartFile file) {
@@ -56,7 +52,7 @@ public class ProofStorage {
 
         String key = userId + "-" + UUID.randomUUID() + "." + extension;
         try (InputStream in = file.getInputStream()) {
-            Files.copy(in, root.resolve(key), StandardCopyOption.REPLACE_EXISTING);
+            store.put(FOLDER + key, in, file.getSize(), contentType);
         } catch (IOException ex) {
             throw new BusinessException("Could not save the file. Please try again.");
         }
@@ -65,18 +61,18 @@ public class ProofStorage {
 
     /** True when the key is well-formed, belongs to this member and the file exists. */
     public boolean isOwnedBy(String key, Long userId) {
-        return key != null && KEY.matcher(key).matches() && key.startsWith(userId + "-") && Files.exists(root.resolve(key));
+        return key != null && KEY.matcher(key).matches() && key.startsWith(userId + "-") && store.exists(FOLDER + key);
     }
 
     public Resource load(String key) {
         if (key == null || !KEY.matcher(key).matches()) {
             throw new NotFoundException("Proof not found");
         }
-        Path path = root.resolve(key).normalize();
-        if (!path.startsWith(root) || !Files.exists(path)) {
+        Resource resource = store.get(FOLDER + key);
+        if (resource == null) {
             throw new NotFoundException("Proof not found");
         }
-        return new FileSystemResource(path);
+        return resource;
     }
 
     public static String contentTypeOf(String key) {
