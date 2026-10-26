@@ -27,6 +27,9 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-mail'
     implementation 'com.google.api-client:google-api-client:2.7.0'
+    // Uploads in production: any S3-compatible bucket (AWS S3, Cloudflare R2, DigitalOcean Spaces)
+    implementation platform('software.amazon.awssdk:bom:2.29.0')
+    implementation 'software.amazon.awssdk:s3'
     implementation 'org.flywaydb:flyway-core'
     implementation 'org.flywaydb:flyway-database-postgresql'
     implementation 'org.mapstruct:mapstruct:1.6.3'
