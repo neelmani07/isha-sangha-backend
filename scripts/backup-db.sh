@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Dumps the database and uploads it to the S3-compatible bucket (Cloudflare R2) under backups/.
-# Used by the weekly GitHub Actions job (.github/workflows/db-backup.yml, from scripts/db-backup-workflow.yml); can also be run by hand with the same variables set.
+# Used by .github/workflows/db-backup.yml; can also be run by hand with the same variables set.
 #
 #   BACKUP_DATABASE_URL  postgresql://user:password@host/dbname?sslmode=require
 #   STORAGE_BUCKET, STORAGE_ENDPOINT, STORAGE_ACCESS_KEY, STORAGE_SECRET_KEY  (same values as the backend)

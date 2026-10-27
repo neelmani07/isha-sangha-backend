@@ -11,7 +11,7 @@ without one the site lives at free addresses like `isha-sangha.pages.dev`.
 | Database | **Neon** PostgreSQL, region Singapore | 0.5 GB, plenty for tens of thousands of members |
 | Photos and proofs | **Cloudflare R2** | 10 GB, private bucket |
 | Sign-in emails | **Brevo** | 300 emails a day |
-| Weekly backup | **GitHub Actions** → R2 | added on GitHub's website, step 10 |
+| Weekly backup | **GitHub Actions** → R2 | `.github/workflows/db-backup.yml` |
 
 Free plans change their limits from time to time; check each one when you sign up. Nothing in the code is tied to
 these providers, so any piece can move to a paid plan or another provider later by changing settings only.
@@ -127,14 +127,7 @@ This ping does not touch the database, so Neon still sleeps when nobody is using
 
 Neon's free plan only keeps a short restore window, so a full copy goes to R2 every week.
 
-**Add the backup job** (once, on GitHub's website, so no token permissions are needed):
-1. Open `scripts/db-backup-workflow.yml` in the `isha-sangha-backend` repo on GitHub, click the copy icon (*Copy raw file*).
-2. Go back to the repo's main page → **Add file → Create new file**.
-3. Name it exactly `.github/workflows/db-backup.yml` (typing the `/` creates the folders), paste, and **Commit changes**.
-
-Then pull it on the Mac so the next push includes it: `git pull origin main` in the backend folder.
-
-**Add the secrets.** In GitHub: `isha-sangha-backend` → **Settings → Secrets and variables → Actions → New repository secret**, add:
+In GitHub: `isha-sangha-backend` → **Settings → Secrets and variables → Actions → New repository secret**, add:
 
 | Secret | Value |
 |---|---|
