@@ -1,111 +1,168 @@
-# Deploying Isha Sangha
+# Deploying Isha Sangha (free setup)
 
-Two pieces go online:
+Everything below runs on free plans. The only optional cost is a custom domain (about ₹800–1,000 a year);
+without one the site lives at free addresses like `isha-sangha.pages.dev`.
 
-| Piece | What it is | Where it goes |
+| Piece | Service (free plan) | Notes |
 |---|---|---|
-| **Frontend** (`isha-sangha-frontend`) | Static files built by Vite | A static host with a CDN (Cloudflare Pages recommended) |
-| **Backend** (this repo) | Spring Boot API in a Docker container | A container host near India (e.g. DigitalOcean App Platform, Bangalore) |
+| Website (frontend) | **Cloudflare Pages** | Builds from GitHub on every push to `main` |
+| API (this repo) | **Render**, free web service, region Singapore | Built from the `Dockerfile` |
+| Keep the API awake | **UptimeRobot** | Pings every 5 minutes so visitors never wait for a cold start |
+| Database | **Neon** PostgreSQL, region Singapore | 0.5 GB, plenty for tens of thousands of members |
+| Photos and proofs | **Cloudflare R2** | 10 GB, private bucket |
+| Sign-in emails | **Brevo** | 300 emails a day |
+| Weekly backup | **GitHub Actions** → R2 | added on GitHub's website, step 10 |
 
-Plus three services the backend uses: **PostgreSQL** (managed), **file storage** (an S3-compatible bucket) and **email** (SMTP for sign-in codes).
+Free plans change their limits from time to time; check each one when you sign up. Nothing in the code is tied to
+these providers, so any piece can move to a paid plan or another provider later by changing settings only.
 
-## Recommended setup
+Keep a note of every value you create below (a password manager is ideal). You'll paste them into Render in step 6.
 
-| Need | Recommendation | Why | Rough cost |
-|---|---|---|---|
-| Domain + DNS | Cloudflare | Free DNS, SSL, CDN in front of everything | domain only |
-| Frontend | Cloudflare Pages | Free, builds from GitHub on every push to `main` | free |
-| Backend | DigitalOcean App Platform, region **BLR1** (Bangalore), from this `Dockerfile` | Close to Indian users, deploys from GitHub, HTTPS included | ~$12/month |
-| Database | DigitalOcean Managed PostgreSQL, **BLR1** | Daily backups + point-in-time restore, no admin work | ~$15/month |
-| Uploads | Cloudflare R2 (private bucket) | 10 GB free, no download fees | free to start |
-| Email | Amazon SES (Mumbai) or Brevo | Reliable delivery for sign-in codes | free / a few $ |
+## 1. Cloudflare account
 
-Roughly **₹2,500–3,000 a month** to start, comfortably enough for tens of thousands of members.
-Render, Railway or a single VPS work too; nothing here is tied to one provider.
+Create a free account at cloudflare.com. It is used for the website (Pages) and file storage (R2).
+If you buy a domain, add it to Cloudflare too so DNS and SSL are handled in one place.
 
-Suggested addresses: site at `https://<domain>`, API at `https://api.<domain>`.
+## 2. File storage: Cloudflare R2
 
-## 1. Database
+1. Cloudflare dashboard → **R2** → enable R2 (asks for a card for identity; the free 10 GB is not charged).
+2. **Create bucket** named `isha-sangha-uploads`. Leave public access **off**.
+3. **Manage R2 API tokens → Create API token**, permission *Object Read & Write*, limited to that bucket.
+4. Note: **Access Key ID**, **Secret Access Key**, and the **S3 endpoint** (`https://<account-id>.r2.cloudflarestorage.com`).
+5. Optional but recommended: bucket **Settings → Object lifecycle rules**: delete objects with prefix `backups/` after 90 days.
 
-1. Create a managed PostgreSQL 16 database in the same region as the backend.
-2. Note the host, port, database name, user and password.
-3. Turn on daily backups (on by default with managed databases).
+Photos go under `images/`, proof documents under `proofs/`, database backups under `backups/`.
+Nothing is publicly readable; the API decides who sees what (proofs only reach admins).
 
-Tables are created automatically on first start (Flyway migrations).
+## 3. Database: Neon
 
-## 2. File storage (Cloudflare R2)
+1. Sign up at neon.tech, create a project in region **AWS Asia Pacific (Singapore)**, PostgreSQL 17.
+2. From **Connect**, copy the connection details. You need two forms of the same thing:
+   - For the API (JDBC): `jdbc:postgresql://<host>/<dbname>?sslmode=require`, plus the user and password separately.
+   - For backups: `postgresql://<user>:<password>@<host>/<dbname>?sslmode=require`.
 
-1. Create a bucket, e.g. `isha-sangha-uploads`. Keep it **private** (no public access).
-2. Create an API token with *Object Read & Write* on that bucket. Note the access key, secret key and the account endpoint
-   (`https://<account-id>.r2.cloudflarestorage.com`).
+Tables are created automatically when the API first starts. The demo map data from development is removed
+automatically in production (migration V13).
 
-Photos and proof documents both go here (`images/` and `proofs/`). Proofs are only ever served to admins;
-photos are served through the API with a 30-day cache.
+Neon puts the database to sleep when idle and wakes it in about a second. The API is set up to close idle
+connections so this works.
 
-To use AWS S3 instead: leave `STORAGE_ENDPOINT` blank and set `STORAGE_REGION` (e.g. `ap-south-1`).
-For DigitalOcean Spaces: endpoint `https://blr1.digitaloceanspaces.com`.
+## 4. Email: Brevo
 
-## 3. Email
+1. Sign up at brevo.com. Under **Senders, Domains & Dedicated IPs**, add the address you will send from
+   (e.g. `no-reply@<your domain>`, or your own email if you have no domain yet) and verify it.
+   With a domain, also authenticate it (Brevo gives DNS records to add in Cloudflare).
+2. **SMTP & API → SMTP**: note the server (`smtp-relay.brevo.com`), port `587`, login, and create an **SMTP key** (the password).
 
-Set up SMTP with Amazon SES or Brevo, verify the sending domain (SPF + DKIM records in Cloudflare DNS),
-and note the SMTP host, port, user and password. Without email, members cannot sign in with a code.
+Without working email, members can't sign in with a code (Google sign-in still works).
 
-## 4. Google sign-in
+## 5. Google sign-in
 
-In Google Cloud Console → APIs & Services → Credentials, create an *OAuth client ID* (Web application) and add
-`https://<domain>` under *Authorised JavaScript origins*. Put the client ID in `GOOGLE_CLIENT_ID`.
+Google Cloud Console → **APIs & Services → Credentials → Create credentials → OAuth client ID** (Web application).
+Under *Authorised JavaScript origins* add the site address (e.g. `https://isha-sangha.pages.dev`, plus your domain later).
+Note the **Client ID**.
 
-## 5. Backend
+## 6. API: Render
 
-Create an app from the GitHub repo, using the `Dockerfile`, HTTP port `8080`, health check path `/api/v1/health`.
-Set these environment variables (mark the secret ones as *secret*):
+1. Sign up at render.com with GitHub. **New → Web Service** → pick the `isha-sangha-backend` repo.
+2. Runtime **Docker**, region **Singapore**, instance type **Free**, branch `main`.
+3. **Health check path**: `/api/v1/health`.
+4. Add these environment variables:
 
-| Variable | Example | Notes |
-|---|---|---|
-| `SPRING_PROFILES_ACTIVE` | `prod` | Already set in the Dockerfile |
-| `DB_URL` | `jdbc:postgresql://<host>:25060/<db>?sslmode=require` | |
-| `DB_USERNAME`, `DB_PASSWORD` | | secret |
-| `JWT_SECRET` | output of `openssl rand -base64 48` | secret, 32+ characters |
-| `FRONTEND_ORIGIN` | `https://<domain>,https://www.<domain>` | comma-separated |
-| `ADMIN_DEFAULT_EMAIL` | your admin email | |
-| `ADMIN_DEFAULT_PASSWORD` | a strong password, 12+ characters | secret; only used to create the first admin. Remove it after the first start |
-| `GOOGLE_CLIENT_ID` | `…apps.googleusercontent.com` | |
-| `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD` | | secret |
-| `OTP_FROM_EMAIL` | `no-reply@<domain>` | must be a verified sender |
-| `STORAGE_BUCKET` | `isha-sangha-uploads` | |
-| `STORAGE_ENDPOINT` | `https://<account-id>.r2.cloudflarestorage.com` | blank for AWS S3 |
-| `STORAGE_REGION` | `auto` | `ap-south-1` for AWS Mumbai |
-| `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY` | | secret |
-| `SITE_NAME`, `SITE_CONTACT_EMAIL` | | |
-| `ORG_LEGAL_NAME`, `ORG_REGISTRATION_NUMBER`, `ORG_TAX_EXEMPTION`, `ORG_ADDRESS` | | once the NGO is registered |
+| Variable | Value |
+|---|---|
+| `DB_URL` | `jdbc:postgresql://<neon host>/<dbname>?sslmode=require` |
+| `DB_USERNAME`, `DB_PASSWORD` | from Neon |
+| `JWT_SECRET` | a long random value: run `openssl rand -base64 48` in Terminal |
+| `FRONTEND_ORIGIN` | the site address, e.g. `https://isha-sangha.pages.dev` (several allowed, comma-separated) |
+| `ADMIN_DEFAULT_EMAIL` | your admin email |
+| `ADMIN_DEFAULT_PASSWORD` | a strong password, 12+ characters. Used only to create the first admin; delete it after step 9 |
+| `GOOGLE_CLIENT_ID` | from step 5 |
+| `MAIL_HOST` | `smtp-relay.brevo.com` |
+| `MAIL_PORT` | `587` |
+| `MAIL_USERNAME`, `MAIL_PASSWORD` | Brevo SMTP login and SMTP key |
+| `OTP_FROM_EMAIL` | the verified sender from step 4 |
+| `SITE_CONTACT_EMAIL` | the public contact address |
+| `STORAGE_BUCKET` | `isha-sangha-uploads` |
+| `STORAGE_ENDPOINT` | the R2 S3 endpoint |
+| `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY` | the R2 token |
 
-**Safety check:** in production the backend refuses to start if the JWT secret is weak, the sample admin password is
-used, sample data is switched on, `FRONTEND_ORIGIN` is localhost, or email is not configured. The log says exactly what to fix.
+`SPRING_PROFILES_ACTIVE=prod` and memory settings for the 512 MB free instance are already in the `Dockerfile`.
 
-Point `api.<domain>` at the app (custom domain in the host's settings, CNAME in Cloudflare).
+5. **Create Web Service**. The first build takes a few minutes. When it is live, Render shows the address,
+   e.g. `https://isha-sangha-api.onrender.com`. Open `/api/v1/health` on it: it should say `UP`.
 
-## 6. Frontend (Cloudflare Pages)
+**If it doesn't start**, read the log. In production the API refuses to start with unsafe settings
+(weak `JWT_SECRET`, the sample admin password, a localhost `FRONTEND_ORIGIN`, no email) and says exactly what to fix.
 
-1. Connect the `isha-sangha-frontend` repo. Build command `npm run build`, output folder `dist`.
-2. Environment variable: `VITE_API_URL=https://api.<domain>/api/v1`.
-3. Add the custom domain `<domain>` (and `www`).
+## 7. Keep the API awake: UptimeRobot
 
-`public/_redirects` makes page links like `/stories/…` work on refresh; `public/_headers` sets caching and basic security headers.
+Render's free instances sleep after 15 minutes without visitors, and the next visitor waits about a minute.
+At uptimerobot.com (free), add an **HTTP(s) monitor** for `https://<your api>.onrender.com/api/v1/health`
+every **5 minutes**. One always-on service stays within Render's 750 free hours a month.
+This ping does not touch the database, so Neon still sleeps when nobody is using the site.
 
-## 7. After the first deploy
+## 8. Website: Cloudflare Pages
 
-- [ ] Open `https://api.<domain>/api/v1/health`: should say UP.
-- [ ] Sign in at `/admin/login` with the admin account, then **remove `ADMIN_DEFAULT_PASSWORD`** from the backend settings.
-- [ ] Sign in as a member with an email code and with Google.
-- [ ] Submit a centre with a proof file, approve it from `/admin/review`, check it appears on the map.
-- [ ] Upload an initiative photo and check it shows.
-- [ ] Add real centres and teachers (the database starts empty apart from the place list in the migrations).
+1. Cloudflare → **Workers & Pages → Create → Pages → Connect to Git** → pick `isha-sangha-frontend`.
+2. Framework preset **Vite** (build command `npm run build`, output folder `dist`).
+3. Environment variable `VITE_API_URL` = `https://<your api>.onrender.com/api/v1`.
+4. Deploy. The site appears at `https://<project>.pages.dev`. Make sure this exact address is in the API's
+   `FRONTEND_ORIGIN` and in Google's authorised origins.
 
-## Backups and updates
+`public/_redirects` makes page links work on refresh; `public/_headers` sets caching and basic security headers.
 
-- The managed database keeps daily backups (7 days) with point-in-time restore. Before big changes, take a manual snapshot.
-- Uploads live in the bucket; turn on R2 bucket versioning or a periodic copy if you want a second copy.
-- Every push to `main` redeploys automatically. Database changes ship as new Flyway migrations and run on start.
+## 9. Check everything
+
+- [ ] Site opens, the globe and map load.
+- [ ] Sign in at `/admin/login` with the admin account. Then in Render **delete `ADMIN_DEFAULT_PASSWORD`**.
+- [ ] Sign in as a member with an email code, and with Google.
+- [ ] On your phone, open `https://<your api>.onrender.com/api/v1/health/client-ip` and compare `seenAs` with your
+      phone's address (search "what is my IP"). If `seenAs` is a Render proxy address instead, sign-in limits would be shared by
+      everyone: set `SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES` to a pattern matching that proxy address and redeploy.
+- [ ] Submit a centre with a proof file, approve it in `/admin/review`, check it shows on the map.
+- [ ] Upload a photo with an initiative and check it shows.
+
+## 10. Weekly backups
+
+Neon's free plan only keeps a short restore window, so a full copy goes to R2 every week.
+
+**Add the backup job** (once, on GitHub's website, so no token permissions are needed):
+1. Open `scripts/db-backup-workflow.yml` in the `isha-sangha-backend` repo on GitHub, click the copy icon (*Copy raw file*).
+2. Go back to the repo's main page → **Add file → Create new file**.
+3. Name it exactly `.github/workflows/db-backup.yml` (typing the `/` creates the folders), paste, and **Commit changes**.
+
+Then pull it on the Mac so the next push includes it: `git pull origin main` in the backend folder.
+
+**Add the secrets.** In GitHub: `isha-sangha-backend` → **Settings → Secrets and variables → Actions → New repository secret**, add:
+
+| Secret | Value |
+|---|---|
+| `BACKUP_DATABASE_URL` | the `postgresql://…` form from step 3 |
+| `STORAGE_BUCKET`, `STORAGE_ENDPOINT`, `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY` | same as in Render |
+
+Then **Actions → Weekly database backup → Run workflow** once to test. A file like
+`backups/isha-sangha-2026-11-01.dump` should appear in the R2 bucket. After that it runs every Monday 03:00 IST.
+
+GitHub pauses scheduled jobs in public repositories after 60 days without commits; keeping the repos private avoids that.
+
+**Restoring** a backup (download the `.dump` file from R2 first):
+
+```bash
+pg_restore --clean --if-exists --no-owner --dbname "postgresql://user:password@host/dbname?sslmode=require" isha-sangha-2026-11-01.dump
+```
+
+## 11. Custom domain (optional, later)
+
+Buy the domain (Cloudflare Registrar sells at cost), then:
+- Pages project → **Custom domains** → add `<domain>` and `www.<domain>`.
+- Render service → **Settings → Custom Domains** → add `api.<domain>` and create the CNAME it shows in Cloudflare DNS.
+- Update `VITE_API_URL` (Pages), `FRONTEND_ORIGIN` (Render) and Google's authorised origins to the new addresses.
+
+## Growing beyond free
+
+When traffic grows: move the API to Render's paid Starter plan (no sleep, more memory) and drop UptimeRobot,
+and move Neon to its paid plan for more storage and longer restore history. No code changes.
 
 ## Before going public
 

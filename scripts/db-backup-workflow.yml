@@ -1,0 +1,31 @@
+# Copy of the weekly backup job. On GitHub's website, create .github/workflows/db-backup.yml with this content
+# (see DEPLOYMENT.md step 10).
+name: Weekly database backup
+
+on:
+  schedule:
+    - cron: "30 21 * * 0" # Sundays 21:30 UTC (Monday 03:00 IST)
+  workflow_dispatch: # "Run workflow" button for a backup right now
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PostgreSQL 17 client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y -qq postgresql-client-17
+
+      - name: Dump and upload to R2
+        env:
+          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          STORAGE_BUCKET: ${{ secrets.STORAGE_BUCKET }}
+          STORAGE_ENDPOINT: ${{ secrets.STORAGE_ENDPOINT }}
+          STORAGE_ACCESS_KEY: ${{ secrets.STORAGE_ACCESS_KEY }}
+          STORAGE_SECRET_KEY: ${{ secrets.STORAGE_SECRET_KEY }}
+        run: PATH="/usr/lib/postgresql/17/bin:$PATH" ./scripts/backup-db.sh

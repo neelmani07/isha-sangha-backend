@@ -14,7 +14,8 @@ WORKDIR /app
 RUN useradd --system --uid 1001 app && mkdir -p /app/uploads && chown app /app/uploads
 COPY --from=build /src/app.jar app.jar
 USER app
+# Memory settings sized for small (512 MB) free instances; override JAVA_TOOL_OPTIONS on bigger machines.
 ENV SPRING_PROFILES_ACTIVE=prod \
-    JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
+    JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=55 -XX:+UseSerialGC -Xss512k -XX:ReservedCodeCacheSize=48m -XX:MaxMetaspaceSize=160m -XX:TieredStopAtLevel=1 -XX:+ExitOnOutOfMemoryError"
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "app.jar"]

@@ -10,11 +10,16 @@ spring:
         format_sql: false
   datasource:
     hikari:
-      maximum-pool-size: ${DB_POOL_SIZE:10}
+      # Small pool that closes idle connections, so a free database (e.g. Neon) can sleep between visits.
+      maximum-pool-size: ${DB_POOL_SIZE:5}
+      minimum-idle: ${DB_MIN_IDLE:0}
+      idle-timeout: 120000
 
 server:
   # Behind the host's load balancer: read the visitor's real address from X-Forwarded-For,
   # trusting only private-network proxies (so visitors can't fake it to dodge rate limits).
+  # If /api/v1/health/client-ip shows the host's proxy instead of your own address, set
+  # SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES to a regex matching that proxy's addresses.
   forward-headers-strategy: native
   shutdown: graceful
   compression:
