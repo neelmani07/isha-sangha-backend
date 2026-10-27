@@ -1,5 +1,3 @@
-# Copy of the weekly backup job. On GitHub's website, create .github/workflows/db-backup.yml with this content
-# (see DEPLOYMENT.md step 10).
 name: Weekly database backup
 
 on:
