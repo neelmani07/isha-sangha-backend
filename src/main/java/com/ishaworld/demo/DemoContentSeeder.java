@@ -9,6 +9,10 @@ import com.ishaworld.user.repository.AppUserRepository;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -49,6 +53,10 @@ public class DemoContentSeeder implements CommandLineRunner {
     }
 
     private record WorldCountry(String name, String iso, double lat, double lng, List<WorldState> states) {
+    }
+
+    /** One city to fill, with where it sits in the country and state. */
+    private record Place(WorldCountry country, WorldState state, WorldCity city, String slug, boolean firstInCountry, boolean firstInState) {
     }
 
     private static final List<String> INDIAN_FIRST = List.of("Priya", "Arjun", "Lakshmi", "Karthik", "Meera", "Ananya", "Rahul",
@@ -129,6 +137,10 @@ public class DemoContentSeeder implements CommandLineRunner {
         }
     }
 
+    /**
+     * Builds every row in memory and writes them in a few multi-row INSERTs: a handful of round trips to the database
+     * instead of thousands, so it stays quick even when the database is far from the app.
+     */
     private void seed() throws IOException {
         Long existing = jdbc.queryForObject("SELECT count(*) FROM demo_content WHERE entity_type NOT IN ('COUNTRY','STATE','CITY')", Long.class);
         if (existing != null && existing > 0) {
@@ -140,62 +152,179 @@ public class DemoContentSeeder implements CommandLineRunner {
             world = objectMapper.readValue(in, new TypeReference<>() {
             });
         }
+        List<Object[]> recorded = new ArrayList<>();
         Random random = new Random(2026);
         List<Long> programIds = jdbc.queryForList("SELECT id FROM program ORDER BY id", Long.class);
-        List<Long> userIds = new ArrayList<>();
-        int cities = 0, centres = 0, teachers = 0;
 
-        for (WorldCountry country : world) {
-            long countryId = countryId(country);
-            boolean firstInCountry = true;
-            for (WorldState state : country.states()) {
-                long stateId = stateId(countryId, state);
-                boolean firstInState = true;
-                for (WorldCity city : state.cities()) {
-                    long cityId = cityId(countryId, stateId, country.iso(), city);
-                    String citySlug = jdbc.queryForObject("SELECT slug FROM city WHERE id = ?", String.class, cityId);
-                    cities++;
-                    String language = language(country.iso(), state.name());
-                    boolean india = "IN".equals(country.iso());
-                    boolean large = LARGE.contains(country.iso());
+        // 1. Places: reuse what is already on the map, add the rest.
+        Map<String, Long> countryIds = new HashMap<>();
+        jdbc.query("SELECT id, iso_code FROM country", rs -> {
+            countryIds.put(rs.getString("iso_code"), rs.getLong("id"));
+        });
+        List<Object[]> newCountries = new ArrayList<>();
+        for (WorldCountry c : world) {
+            if (!countryIds.containsKey(c.iso())) {
+                newCountries.add(new Object[]{c.name(), c.iso(), c.lat(), c.lng()});
+            }
+        }
+        for (Map<String, Object> row : insert("country", "name, iso_code, latitude, longitude", newCountries, "id, iso_code")) {
+            countryIds.put((String) row.get("iso_code"), number(row, "id"));
+            recorded.add(new Object[]{"COUNTRY", number(row, "id")});
+        }
 
-                    // Centres: every Indian city, the first city of each state in large countries, capitals elsewhere
-                    Long realCentres = jdbc.queryForObject("SELECT count(*) FROM center WHERE city_id = ?", Long.class, cityId);
-                    boolean wantsCentre = india || (large && firstInState) || firstInCountry || random.nextInt(3) == 0;
-                    if (wantsCentre && realCentres != null && realCentres == 0) {
-                        addCentre(cityId, citySlug, "CITY_CENTER", "Isha " + city.name() + " Centre", city, state, country, language, random, 1);
-                        centres++;
-                        if (india && random.nextInt(3) == 0) {
-                            addCentre(cityId, citySlug, "ISHA_SHOP", "Isha Shop " + city.name(), city, state, country, language, random, 2);
-                            centres++;
-                        }
-                        if (random.nextInt(india ? 12 : 30) == 0) {
-                            addCentre(cityId, citySlug, "DEVI_TEMPLE", "Linga Bhairavi Abode, " + city.name(), city, state, country, language, random, 3);
-                            centres++;
-                        }
-                    }
-
-                    int teacherCount = india ? 1 + random.nextInt(4) : large ? (firstInState ? 1 : 0) + random.nextInt(2)
-                            : (firstInCountry ? 1 : 0) + (random.nextInt(3) == 0 ? 1 : 0);
-                    for (int t = 1; t <= teacherCount; t++) {
-                        addTeacher(cityId, citySlug, t, city, country.iso(), language, programIds, random);
-                        teachers++;
-                    }
-
-                    int meditatorCount = india ? 4 + random.nextInt(6) : large ? 2 + random.nextInt(4) : 1 + random.nextInt(3);
-                    for (int m = 0; m < meditatorCount; m++) {
-                        userIds.add(addMeditator(userIds.size() + 1, cityId, city, country.iso(), language, random));
-                    }
-                    firstInState = false;
-                    firstInCountry = false;
+        Map<String, Long> stateIds = new HashMap<>();
+        jdbc.query("SELECT id, country_id, name FROM state", rs -> {
+            stateIds.put(rs.getLong("country_id") + "|" + rs.getString("name").toLowerCase(), rs.getLong("id"));
+        });
+        List<Object[]> newStates = new ArrayList<>();
+        for (WorldCountry c : world) {
+            for (WorldState s : c.states()) {
+                String key = countryIds.get(c.iso()) + "|" + s.name().toLowerCase();
+                if (!stateIds.containsKey(key)) {
+                    stateIds.put(key, -1L);
+                    newStates.add(new Object[]{countryIds.get(c.iso()), s.name(), s.lat(), s.lng()});
                 }
             }
         }
+        for (Map<String, Object> row : insert("state", "country_id, name, latitude, longitude", newStates, "id, country_id, name")) {
+            stateIds.put(number(row, "country_id") + "|" + ((String) row.get("name")).toLowerCase(), number(row, "id"));
+            recorded.add(new Object[]{"STATE", number(row, "id")});
+        }
 
-        List<AppUser> likers = appUserRepository.findAllById(userIds.subList(0, Math.min(60, userIds.size())));
-        communitySeeder.seedCommunity(likers, this::record);
-        log.warn("Added preview sample data: {} cities, {} centres, {} teachers, {} meditators, plus sample stories, "
-                + "initiatives, links and shop items. Remove it all with DEMO_CONTENT=remove.", cities, centres, teachers, userIds.size());
+        Map<String, long[]> citiesBySlug = new HashMap<>(); // slug -> {id, countryId}
+        jdbc.query("SELECT id, slug, country_id FROM city", rs -> {
+            citiesBySlug.put(rs.getString("slug"), new long[]{rs.getLong("id"), rs.getLong("country_id")});
+        });
+        List<Place> places = new ArrayList<>();
+        List<Object[]> newCities = new ArrayList<>();
+        for (WorldCountry c : world) {
+            long countryId = countryIds.get(c.iso());
+            boolean firstInCountry = true;
+            for (WorldState s : c.states()) {
+                long stateId = stateIds.get(countryId + "|" + s.name().toLowerCase());
+                boolean firstInState = true;
+                for (WorldCity city : s.cities()) {
+                    String base = SlugGenerator.from(city.name());
+                    String slug = null;
+                    for (String candidate : List.of(base, base + "-" + c.iso().toLowerCase())) {
+                        long[] found = citiesBySlug.get(candidate);
+                        if (found == null) {
+                            citiesBySlug.put(candidate, new long[]{-1, countryId});
+                            newCities.add(new Object[]{countryId, stateId, candidate, city.name(), city.lat(), city.lng()});
+                            slug = candidate;
+                            break;
+                        }
+                        if (found[1] == countryId) {
+                            slug = candidate;
+                            break;
+                        }
+                    }
+                    if (slug == null) {
+                        throw new IllegalStateException("No free slug for city " + city.name());
+                    }
+                    places.add(new Place(c, s, city, slug, firstInCountry, firstInState));
+                    firstInCountry = false;
+                    firstInState = false;
+                }
+            }
+        }
+        for (Map<String, Object> row : insert("city", "country_id, state_id, slug, name, latitude, longitude", newCities, "id, slug")) {
+            citiesBySlug.get((String) row.get("slug"))[0] = number(row, "id");
+            recorded.add(new Object[]{"CITY", number(row, "id")});
+        }
+        Set<Long> citiesWithCentres = new HashSet<>(jdbc.queryForList("SELECT DISTINCT city_id FROM center", Long.class));
+
+        // 2. People and places of practice around each city.
+        List<Object[]> centres = new ArrayList<>();
+        List<Object[]> teachers = new ArrayList<>();
+        Map<String, List<Long>> teacherPrograms = new HashMap<>();
+        List<Object[]> users = new ArrayList<>();
+        List<Object[]> meditators = new ArrayList<>(); // filled with the user's email in slot 0, swapped for its id later
+        for (Place place : places) {
+            long cityId = citiesBySlug.get(place.slug())[0];
+            WorldCity city = place.city();
+            String iso = place.country().iso();
+            String language = language(iso, place.state().name());
+            String languages = language.equals("English") ? "English" : "English, " + language;
+            boolean india = "IN".equals(iso);
+            boolean large = LARGE.contains(iso);
+
+            boolean wantsCentre = india || (large && place.firstInState()) || place.firstInCountry() || random.nextInt(3) == 0;
+            if (wantsCentre && !citiesWithCentres.contains(cityId)) {
+                centres.add(centre(cityId, place.slug(), "CITY_CENTER", "Isha " + city.name() + " Centre", place, languages, random, 1));
+                if (india && random.nextInt(3) == 0) {
+                    centres.add(centre(cityId, place.slug(), "ISHA_SHOP", "Isha Shop " + city.name(), place, languages, random, 2));
+                }
+                if (random.nextInt(india ? 12 : 30) == 0) {
+                    centres.add(centre(cityId, place.slug(), "DEVI_TEMPLE", "Linga Bhairavi Abode, " + city.name(), place, languages, random, 3));
+                }
+            }
+
+            int teacherCount = india ? 1 + random.nextInt(4) : large ? (place.firstInState() ? 1 : 0) + random.nextInt(2)
+                    : (place.firstInCountry() ? 1 : 0) + (random.nextInt(3) == 0 ? 1 : 0);
+            for (int t = 1; t <= teacherCount; t++) {
+                String slug = "sample-teacher-" + place.slug() + "-" + t;
+                double[] p = near(city, 1, 8, random);
+                teachers.add(new Object[]{cityId, slug, fullName(iso, random), "Sample listing for the site preview. This is not a real teacher.",
+                        p[0], p[1], List.of("IN_PERSON", "IN_PERSON", "ONLINE", "BOTH").get(random.nextInt(4)), languages, 1 + random.nextInt(15)});
+                List<Long> shuffled = new ArrayList<>(programIds);
+                Collections.shuffle(shuffled, random);
+                teacherPrograms.put(slug, shuffled.subList(0, Math.min(shuffled.size(), 1 + random.nextInt(3))));
+            }
+
+            int meditatorCount = india ? 4 + random.nextInt(6) : large ? 2 + random.nextInt(4) : 1 + random.nextInt(3);
+            for (int m = 0; m < meditatorCount; m++) {
+                String name = fullName(iso, random);
+                String email = "sample-member-" + (users.size() + 1) + "@example.org";
+                users.add(new Object[]{email, name});
+                List<String> practices = PRACTICES.stream().filter(x -> random.nextInt(3) == 0).limit(4).toList();
+                String[] parts = name.split(" ");
+                double[] p = near(city, 1.5, 6, random);
+                meditators.add(new Object[]{email, cityId, parts[0] + " " + parts[parts.length - 1].charAt(0) + ".", p[0], p[1],
+                        String.join(",", practices.isEmpty() ? List.of("Isha Kriya") : practices), languages,
+                        random.nextInt(3) > 0, random.nextBoolean(), random.nextInt(10) != 0});
+            }
+        }
+
+        for (Map<String, Object> row : insert("center",
+                "city_id, slug, name, type, description, address, latitude, longitude, opening_hours, languages, verified, listing_status, active",
+                centres, "id")) {
+            recorded.add(new Object[]{"CENTER", number(row, "id")});
+        }
+        List<Object[]> programRows = new ArrayList<>();
+        for (Map<String, Object> row : insert("teacher",
+                "city_id, slug, name, bio, latitude, longitude, teaching_mode, languages, years_teaching",
+                teachers, "id, slug")) {
+            long id = number(row, "id");
+            recorded.add(new Object[]{"TEACHER", id});
+            for (Long programId : teacherPrograms.get((String) row.get("slug"))) {
+                programRows.add(new Object[]{id, programId});
+            }
+        }
+        insert("teacher_program", "teacher_id, program_id", programRows, null);
+        Map<String, Long> userIds = new HashMap<>();
+        List<Long> userIdList = new ArrayList<>();
+        for (Map<String, Object> row : insert("app_user", "email, name", users, "id, email")) {
+            long id = number(row, "id");
+            userIds.put((String) row.get("email"), id);
+            userIdList.add(id);
+            recorded.add(new Object[]{"USER", id});
+        }
+        for (Object[] m : meditators) {
+            m[0] = userIds.get((String) m[0]);
+        }
+        insert("meditator", "app_user_id, city_id, display_name, approx_latitude, approx_longitude, practices, languages, "
+                + "open_to_connect, open_to_volunteer, visible", meditators, null);
+
+        // 3. Stories, initiatives, links and shop items, liked and supported by some of the sample members.
+        Collections.sort(userIdList);
+        List<AppUser> likers = appUserRepository.findAllById(userIdList.subList(0, Math.min(25, userIdList.size())));
+        communitySeeder.seedCommunity(likers, (type, id) -> recorded.add(new Object[]{type, id}));
+
+        insert("demo_content", "entity_type, entity_id", recorded, null);
+        log.warn("Added preview sample data: {} new countries, {} new cities, {} centres, {} teachers, {} members, plus sample stories, "
+                        + "initiatives, links and shop items. Remove it all with DEMO_CONTENT=remove.",
+                newCountries.size(), newCities.size(), centres.size(), teachers.size(), users.size());
     }
 
     private void remove() {
@@ -225,104 +354,41 @@ public class DemoContentSeeder implements CommandLineRunner {
                 listed, counts[4], counts[5], counts[6], counts[7], counts[11], counts[12], counts[14]);
     }
 
-    private long countryId(WorldCountry c) {
-        List<Long> found = jdbc.queryForList("SELECT id FROM country WHERE iso_code = ?", Long.class, c.iso());
-        if (!found.isEmpty()) {
-            return found.get(0);
-        }
-        long id = jdbc.queryForObject("INSERT INTO country (name, iso_code, latitude, longitude) VALUES (?, ?, ?, ?) RETURNING id",
-                Long.class, c.name(), c.iso(), c.lat(), c.lng());
-        record("COUNTRY", id);
-        return id;
-    }
 
-    private long stateId(long countryId, WorldState s) {
-        List<Long> found = jdbc.queryForList("SELECT id FROM state WHERE country_id = ? AND lower(name) = lower(?)", Long.class, countryId, s.name());
-        if (!found.isEmpty()) {
-            return found.get(0);
-        }
-        long id = jdbc.queryForObject("INSERT INTO state (country_id, name, latitude, longitude) VALUES (?, ?, ?, ?) RETURNING id",
-                Long.class, countryId, s.name(), s.lat(), s.lng());
-        record("STATE", id);
-        return id;
-    }
-
-    /** Reuses a city already on the map (same slug, same country); otherwise adds it, with a country suffix if the slug is taken. */
-    private long cityId(long countryId, long stateId, String iso, WorldCity c) {
-        String slug = SlugGenerator.from(c.name());
-        for (String candidate : List.of(slug, slug + "-" + iso.toLowerCase())) {
-            List<Map<String, Object>> rows = jdbc.queryForList("SELECT id, country_id FROM city WHERE slug = ?", candidate);
-            if (rows.isEmpty()) {
-                long id = jdbc.queryForObject("""
-                        INSERT INTO city (country_id, state_id, slug, name, latitude, longitude, active, listing_status)
-                        VALUES (?, ?, ?, ?, ?, ?, TRUE, 'APPROVED') RETURNING id""",
-                        Long.class, countryId, stateId, candidate, c.name(), c.lat(), c.lng());
-                record("CITY", id);
-                return id;
-            }
-            if (((Number) rows.get(0).get("country_id")).longValue() == countryId) {
-                return ((Number) rows.get(0).get("id")).longValue();
-            }
-        }
-        throw new IllegalStateException("No free slug for city " + c.name());
-    }
-
-    private void addCentre(long cityId, String citySlug, String type, String name, WorldCity city, WorldState state,
-                           WorldCountry country, String language, Random random, int n) {
-        double[] p = near(city, 0.5, 4, random);
-        long id = jdbc.queryForObject("""
-                INSERT INTO center (city_id, slug, name, type, description, address, latitude, longitude, opening_hours, languages,
-                                    verified, listing_status, active)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, FALSE, 'APPROVED', TRUE) RETURNING id""",
-                Long.class, cityId, "sample-centre-" + citySlug + "-" + n, name, type,
+    private static Object[] centre(long cityId, String citySlug, String type, String name, Place place, String languages,
+                                   Random random, int n) {
+        double[] at = near(place.city(), 0.5, 4, random);
+        return new Object[]{cityId, "sample-centre-" + citySlug + "-" + n, name, type,
                 "Sample listing for the site preview. This is not a real centre.",
-                city.name() + ", " + state.name() + ", " + country.name(), p[0], p[1],
-                "DEVI_TEMPLE".equals(type) ? "Daily, 6:00 am – 8:00 pm" : "Sat–Sun, 6:00–8:00 am",
-                language.equals("English") ? "English" : "English, " + language);
-        record("CENTER", id);
+                place.city().name() + ", " + place.state().name() + ", " + place.country().name(), at[0], at[1],
+                "DEVI_TEMPLE".equals(type) ? "Daily, 6:00 am – 8:00 pm" : "Sat–Sun, 6:00–8:00 am", languages, false, "APPROVED", true};
     }
 
-    private void addTeacher(long cityId, String citySlug, int n, WorldCity city, String iso, String language,
-                            List<Long> programIds, Random random) {
-        String name = fullName(iso, random);
-        double[] p = near(city, 1, 8, random);
-        String mode = List.of("IN_PERSON", "IN_PERSON", "ONLINE", "BOTH").get(random.nextInt(4));
-        long id = jdbc.queryForObject("""
-                INSERT INTO teacher (city_id, slug, name, bio, latitude, longitude, teaching_mode, languages, years_teaching,
-                                     verified, listing_status, active)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, FALSE, 'APPROVED', TRUE) RETURNING id""",
-                Long.class, cityId, "sample-teacher-" + citySlug + "-" + n, name,
-                "Sample listing for the site preview. This is not a real teacher.", p[0], p[1], mode,
-                language.equals("English") ? "English" : "English, " + language, 1 + random.nextInt(15));
-        List<Long> shuffled = new ArrayList<>(programIds);
-        java.util.Collections.shuffle(shuffled, random);
-        for (Long programId : shuffled.subList(0, Math.min(shuffled.size(), 1 + random.nextInt(3)))) {
-            jdbc.update("INSERT INTO teacher_program (teacher_id, program_id) VALUES (?, ?)", id, programId);
+    /** Multi-row INSERT in chunks; returns the RETURNING rows (empty when {@code returning} is null). */
+    private List<Map<String, Object>> insert(String table, String columns, List<Object[]> rows, String returning) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        if (rows.isEmpty()) {
+            return out;
         }
-        record("TEACHER", id);
+        int width = rows.get(0).length;
+        String tuple = "(" + String.join(", ", Collections.nCopies(width, "?")) + ")";
+        int chunk = Math.max(1, 5000 / width);
+        for (int from = 0; from < rows.size(); from += chunk) {
+            List<Object[]> part = rows.subList(from, Math.min(rows.size(), from + chunk));
+            String sql = "INSERT INTO " + table + " (" + columns + ") VALUES " + String.join(", ", Collections.nCopies(part.size(), tuple))
+                    + (returning == null ? "" : " RETURNING " + returning);
+            Object[] args = part.stream().flatMap(Arrays::stream).toArray();
+            if (returning == null) {
+                jdbc.update(sql, args);
+            } else {
+                out.addAll(jdbc.queryForList(sql, args));
+            }
+        }
+        return out;
     }
 
-    private long addMeditator(int n, long cityId, WorldCity city, String iso, String language, Random random) {
-        String name = fullName(iso, random);
-        long userId = jdbc.queryForObject("INSERT INTO app_user (email, name, active) VALUES (?, ?, TRUE) RETURNING id",
-                Long.class, "sample-member-" + n + "@example.org", name);
-        record("USER", userId);
-        List<String> practices = PRACTICES.stream().filter(x -> random.nextInt(3) == 0).limit(4).toList();
-        String[] parts = name.split(" ");
-        double[] p = near(city, 1.5, 6, random);
-        jdbc.update("""
-                INSERT INTO meditator (app_user_id, city_id, display_name, approx_latitude, approx_longitude, practices, languages,
-                                       open_to_connect, open_to_volunteer, visible, active)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE)""",
-                userId, cityId, parts[0] + " " + parts[parts.length - 1].charAt(0) + ".", p[0], p[1],
-                String.join(",", practices.isEmpty() ? List.of("Isha Kriya") : practices),
-                language.equals("English") ? "English" : "English, " + language,
-                random.nextInt(3) > 0, random.nextBoolean(), random.nextInt(10) != 0);
-        return userId;
-    }
-
-    private void record(String type, Long id) {
-        jdbc.update("INSERT INTO demo_content (entity_type, entity_id) VALUES (?, ?) ON CONFLICT DO NOTHING", type, id);
+    private static long number(Map<String, Object> row, String column) {
+        return ((Number) row.get(column)).longValue();
     }
 
     /** A point a few km from the city centre, rounded like real approximate locations. */
