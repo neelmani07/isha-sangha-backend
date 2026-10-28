@@ -117,9 +117,9 @@ This ping does not touch the database, so Neon still sleeps when nobody is using
 - [ ] Site opens, the globe and map load.
 - [ ] Sign in at `/admin/login` with the admin account. Then in Render **delete `ADMIN_DEFAULT_PASSWORD`**.
 - [ ] Sign in as a member with an email code, and with Google.
-- [ ] On your phone, open `https://<your api>.onrender.com/api/v1/health/client-ip` and compare `seenAs` with your
-      phone's address (search "what is my IP"). If `seenAs` is a Render proxy address instead, sign-in limits would be shared by
-      everyone: set `SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES` to a pattern matching that proxy address and redeploy.
+- [ ] On your phone, open `https://<your api>.onrender.com/api/v1/health/client-ip`: `seenAs` should be your phone's
+      public address (search "what is my IP"). Render serves the app through Cloudflare, whose address ranges are
+      trusted by default in the prod profile; on another host, set `TRUSTED_PROXIES` to that host's proxy ranges.
 - [ ] Submit a centre with a proof file, approve it in `/admin/review`, check it shows on the map.
 - [ ] Upload a photo with an initiative and check it shows.
 
