@@ -145,6 +145,24 @@ GitHub pauses scheduled jobs in public repositories after 60 days without commit
 pg_restore --clean --if-exists --no-owner --dbname "postgresql://user:password@host/dbname?sslmode=require" isha-sangha-2026-11-01.dump
 ```
 
+## Preview sample data
+
+While the site is in preview, it shows sample data so every page has something in it: 119 countries, 334 major
+cities, about 280 centres, 415 teachers, 1,090 members, and sample stories, initiatives, links and shop items.
+Every sample listing says so in its description, has no phone or email, and a notice at the bottom of the site says
+the listings are samples.
+
+It is controlled by `DEMO_CONTENT` (default `on` in the prod profile):
+
+| Value | What happens on the next start |
+|---|---|
+| `on` | Adds the sample data once (does nothing if it is already there) |
+| `remove` | Deletes every sample row. Countries and cities stay (they are real places). Anything real members or admins added is never touched |
+| `off` | Nothing |
+
+**Before announcing the site:** set `DEMO_CONTENT=remove` (in Render, or by changing the default in
+`application-prod.yml` and pushing), let it deploy once, then set it to `off`.
+
 ## 11. Custom domain (optional, later)
 
 Buy the domain (Cloudflare Registrar sells at cost), then:

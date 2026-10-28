@@ -80,6 +80,8 @@ app:
   uploads:
     # Local storage folder (images/ and proofs/ inside it) when app.storage.type=local.
     dir: ${UPLOADS_DIR:uploads}
+  # Preview sample data on a deployed site (DemoContentSeeder): on | remove | off. See DEPLOYMENT.md.
+  demo-content: ${DEMO_CONTENT:off}
   dev:
     # Local development only: sample meditators, initiatives and resource links. Never enable in production.
     seed-sample-data: ${SEED_SAMPLE_DATA:${SEED_SAMPLE_MEDITATORS:false}}

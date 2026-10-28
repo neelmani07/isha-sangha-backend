@@ -26,22 +26,23 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Random;
+import java.util.function.BiConsumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Local development only: sample initiatives (with supporters), resource links and stories (with likes), so those pages have
- * something to show. Off unless SEED_SAMPLE_DATA=true; runs after the sample meditators exist.
+ * Sample initiatives (with supporters), resource links and stories (with likes), so those pages have
+ * something to show. Runs by itself only with SEED_SAMPLE_DATA=true (local development); the live preview data
+ * uses {@link #seedCommunity} through DemoContentSeeder.
  */
 @Component
 @Order(2)
-@ConditionalOnProperty(name = "app.dev.seed-sample-data", havingValue = "true")
 public class SampleCommunitySeeder implements CommandLineRunner {
 
     private static final Logger log = LoggerFactory.getLogger(SampleCommunitySeeder.class);
@@ -169,6 +170,7 @@ public class SampleCommunitySeeder implements CommandLineRunner {
     private final ObjectMapper objectMapper;
     private final CityRepository cityRepository;
     private final AppUserRepository appUserRepository;
+    private final boolean devSeed;
 
     public SampleCommunitySeeder(
             InitiativeRepository initiativeRepository,
@@ -178,8 +180,10 @@ public class SampleCommunitySeeder implements CommandLineRunner {
             StoryRepository storyRepository,
             ShopListingRepository shopListingRepository,
             CenterRepository centerRepository,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            @Value("${app.dev.seed-sample-data:false}") boolean devSeed
     ) {
+        this.devSeed = devSeed;
         this.storyRepository = storyRepository;
         this.shopListingRepository = shopListingRepository;
         this.centerRepository = centerRepository;
@@ -193,8 +197,22 @@ public class SampleCommunitySeeder implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
+        if (!devSeed) {
+            return;
+        }
         List<AppUser> sampleUsers = appUserRepository.findAll().stream()
                 .filter(u -> u.getEmail().startsWith("sample-meditator-")).toList();
+        seedCommunity(sampleUsers, (kind, id) -> {
+        });
+    }
+
+    /**
+     * Adds the sample initiatives, links, stories and shop items (each only if that list is empty), with likes and
+     * support from the given users. {@code record} receives ("INITIATIVE" | "RESOURCE" | "STORY" | "PRODUCT", id)
+     * for every row added, so it can be removed again later.
+     */
+    @Transactional
+    public void seedCommunity(List<AppUser> sampleUsers, BiConsumer<String, Long> record) {
         Random random = new Random(108);
 
         if (initiativeRepository.count() == 0) {
@@ -222,6 +240,7 @@ public class SampleCommunitySeeder implements CommandLineRunner {
                 i.setPhotoUrl(UNSPLASH.formatted(s.photo()));
                 i.setListingStatus(ListingStatus.APPROVED);
                 i = initiativeRepository.save(i);
+                record.accept("INITIATIVE", i.getId());
                 for (AppUser u : sampleUsers) {
                     if (random.nextInt(4) == 0) {
                         initiativeRepository.addSupporter(i.getId(), u.getId());
@@ -240,6 +259,7 @@ public class SampleCommunitySeeder implements CommandLineRunner {
                 r.setDescription(s.description());
                 r.setListingStatus(ListingStatus.APPROVED);
                 r = resourceLinkRepository.save(r);
+                record.accept("RESOURCE", r.getId());
                 for (AppUser u : sampleUsers) {
                     if (random.nextInt(6) == 0) {
                         resourceLinkRepository.addVote(r.getId(), u.getId());
@@ -250,7 +270,7 @@ public class SampleCommunitySeeder implements CommandLineRunner {
         }
 
         if (storyRepository.count() == 0) {
-            seedStories(sampleUsers, random);
+            seedStories(sampleUsers, random, record);
         }
 
         if (shopListingRepository.count() == 0) {
@@ -273,13 +293,13 @@ public class SampleCommunitySeeder implements CommandLineRunner {
                 p.setContactEmail(s.email());
                 p.setRulesConfirmed(true);
                 p.setListingStatus(ListingStatus.APPROVED);
-                shopListingRepository.save(p);
+                record.accept("PRODUCT", shopListingRepository.save(p).getId());
             }
             log.warn("[DEV] Seeded sample shop listings");
         }
     }
 
-    private void seedStories(List<AppUser> sampleUsers, Random random) {
+    private void seedStories(List<AppUser> sampleUsers, Random random, BiConsumer<String, Long> record) {
         List<SampleStory> samples;
         try (var in = new ClassPathResource("dev/sample-stories.json").getInputStream()) {
             samples = objectMapper.readValue(in, new TypeReference<>() {
@@ -310,6 +330,7 @@ public class SampleCommunitySeeder implements CommandLineRunner {
             story.setPublishedAt(LocalDate.parse(s.publishedOn()).atStartOfDay(ZoneOffset.UTC).toInstant());
             story.setListingStatus(ListingStatus.APPROVED);
             Story saved = storyRepository.save(story);
+            record.accept("STORY", saved.getId());
             sampleUsers.stream().limit(Math.min(sampleUsers.size(), Math.max(1, s.likes() / 4))).forEach(u -> {
                 if (random.nextInt(3) > 0) {
                     storyRepository.addLike(saved.getId(), u.getId());
