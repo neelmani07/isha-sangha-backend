@@ -38,6 +38,9 @@ app:
     secret: ${JWT_SECRET:}
   storage:
     type: ${STORAGE_TYPE:s3}
+  # Sample countries, cities, centres, teachers, members and stories for the preview, marked as samples on the site.
+  # Before announcing the site: change this default to "remove" (or set DEMO_CONTENT=remove), deploy once, then "off".
+  demo-content: ${DEMO_CONTENT:on}
   dev:
     seed-sample-data: false
 

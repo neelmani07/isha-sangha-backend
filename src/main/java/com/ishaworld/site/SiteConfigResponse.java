@@ -6,6 +6,8 @@ public record SiteConfigResponse(
         String contactEmail,
         SiteProperties.Organization organization,
         String disclaimer,
-        String googleClientId
+        String googleClientId,
+        /** True while preview sample data is on the site; the website then shows a notice. */
+        boolean sampleData
 ) {
 }
